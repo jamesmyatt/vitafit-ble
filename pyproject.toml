@@ -1,16 +1,16 @@
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["uv_build>=0.12.21,<0.13"]
+build-backend = "uv_build"
 
 [project]
 name = "vitafit-ble"
 version = "0.1.0"
-description = "Bluetooth client for the Vitafit VT701 body fat scale"
+description = "Bluetooth library for Vitafit devices"
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [{ name = "James Myatt" }]
-requires-python = ">=3.13"
+requires-python = ">=3.11"
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Framework :: AsyncIO",
@@ -23,19 +23,34 @@ dependencies = [
   "bleak-retry-connector>=4.0",
   "bluetooth-data-tools>=1.28",
   "bluetooth-sensor-state-data>=1.9",
-  "home-assistant-bluetooth>=2.0",
+  "habluetooth>=3.42.0",
   "sensor-state-data>=2.20",
 ]
 
 [project.urls]
-Homepage = "https://github.com/jamesmyatt/vitafit-ble"
-Issues = "https://github.com/jamesmyatt/vitafit-ble/issues"
+"Documentation" = "https://vitafit-ble.readthedocs.io"
+"Repository" = "https://github.com/jamesmyatt/vitafit-ble"
+"Bug Tracker" = "https://github.com/jamesmyatt/vitafit-ble/issues"
+"Changelog" = "https://github.com/jamesmyatt/vitafit-ble/blob/main/CHANGELOG.md"
 
 [dependency-groups]
-dev = ["mypy", "pytest", "pytest-asyncio", "ruff"]
+dev = ["mypy", "pre-commit", "pytest", "pytest-asyncio", "pytest-cov", "ruff"]
+docs = ["furo", "myst-parser", "sphinx", "sphinx-autobuild"]
 
 [tool.pytest.ini_options]
+addopts = "-v -Wdefault --cov=vitafit_ble --cov-report=term-missing:skip-covered"
 asyncio_mode = "auto"
+
+[tool.coverage.run]
+branch = true
+
+[tool.coverage.report]
+exclude_lines = [
+  "pragma: no cover",
+  "@overload",
+  "if TYPE_CHECKING",
+  "raise NotImplementedError",
+]
 
 [tool.ruff.lint]
 select = ["ALL"]
@@ -43,6 +58,8 @@ ignore = ["COM812", "CPY001", "D203", "D213"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["D", "S101", "PLR2004", "SLF001"]
+"docs/conf.py" = ["A001", "D100", "INP001"]
+"scripts/**" = ["INP001"]
 
 [tool.ruff.lint.isort]
 force-sort-within-sections = true

@@ -3,27 +3,22 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
+from bleak.exc import BleakError
 from bleak_retry_connector import BleakClientWithServiceCache, establish_connection
 from bluetooth_data_tools import short_address
 from bluetooth_sensor_state_data import BluetoothData
 from sensor_state_data import SensorLibrary, SensorUpdate
 
+from .const import LOCAL_NAME_PREFIX, MANUFACTURER, MODEL, POLL_INTERVAL
 from .session import async_measure
 
 if TYPE_CHECKING:
     from bleak.backends.device import BLEDevice
-    from home_assistant_bluetooth import BluetoothServiceInfo
+    from habluetooth import BluetoothServiceInfo
 
 _LOGGER = logging.getLogger(__name__)
-
-LOCAL_NAME_PREFIX = "Vitafit"
-MANUFACTURER = "Vitafit"
-MODEL = "VT701"
-
-# Minimum seconds between connections, so one weigh-in is read once.
-POLL_INTERVAL = 60.0
 
 
 class VitafitBluetoothDeviceData(BluetoothData):
@@ -46,19 +41,39 @@ class VitafitBluetoothDeviceData(BluetoothData):
     ) -> bool:
         """Return True if the scale should be connected to.
 
-        The scale only advertises while awake, i.e. after being stepped on.
+        True for the first advertisement, then at most once every
+        ``POLL_INTERVAL`` (60 s), so one weigh-in is read once. Safe to call on
+        every advertisement. The scale only advertises while awake, i.e. after
+        being stepped on.
         """
         return last_poll is None or last_poll > POLL_INTERVAL
 
-    async def async_poll(self, ble_device: BLEDevice) -> SensorUpdate:
-        """Connect, read one weigh-in and disconnect."""
+    async def async_poll(
+        self,
+        ble_device: BLEDevice,
+        **measure_kwargs: Any,  # noqa: ANN401
+    ) -> SensorUpdate:
+        """Connect, read one weigh-in and disconnect.
+
+        The update has ``mass`` and ``impedance`` (``None`` if the scale
+        couldn't measure it). If no stable weight arrives, or a Bluetooth error
+        occurs, the update has no readings; the error is logged as a warning.
+
+        ``measure_kwargs`` are passed to ``async_measure``, for example
+        ``weight_only=True``.
+        """
+        _LOGGER.debug("Polling Vitafit scale: %s", ble_device.address)
         client = await establish_connection(
             BleakClientWithServiceCache, ble_device, ble_device.address
         )
         try:
-            measurement = await async_measure(client)
+            measurement = await async_measure(client, **measure_kwargs)
+        except BleakError as err:
+            _LOGGER.warning("%s: weigh-in failed: %s", ble_device.address, err)
+            return self._finish_update()
         finally:
             await client.disconnect()
+            _LOGGER.debug("%s: disconnected", ble_device.address)
 
         if measurement is None:
             _LOGGER.debug("%s: no stable weight received", ble_device.address)

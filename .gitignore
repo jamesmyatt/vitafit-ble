@@ -7,3 +7,7 @@ dist/
 .ruff_cache/
 uv.lock
 .coverage
+docs/_build/
+coverage.xml
+node_modules/
+vitafit-capture-*.jsonl
