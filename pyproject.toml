@@ -1,0 +1,52 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "vitafit-ble"
+version = "0.1.0"
+description = "Bluetooth client for the Vitafit VT701 body fat scale"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "James Myatt" }]
+requires-python = ">=3.13"
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Framework :: AsyncIO",
+  "Programming Language :: Python :: 3",
+  "Topic :: Home Automation",
+  "Typing :: Typed",
+]
+dependencies = [
+  "bleak>=1.0",
+  "bleak-retry-connector>=4.0",
+  "bluetooth-data-tools>=1.28",
+  "bluetooth-sensor-state-data>=1.9",
+  "home-assistant-bluetooth>=2.0",
+  "sensor-state-data>=2.20",
+]
+
+[project.urls]
+Homepage = "https://github.com/jamesmyatt/vitafit-ble"
+Issues = "https://github.com/jamesmyatt/vitafit-ble/issues"
+
+[dependency-groups]
+dev = ["mypy", "pytest", "pytest-asyncio", "ruff"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = ["COM812", "CPY001", "D203", "D213"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["D", "S101", "PLR2004", "SLF001"]
+
+[tool.ruff.lint.isort]
+force-sort-within-sections = true
+combine-as-imports = true
+
+[tool.mypy]
+strict = true
