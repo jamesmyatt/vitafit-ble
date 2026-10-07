@@ -20,15 +20,15 @@ async with BleakClient(address) as client:
     measurement = await async_measure(client)
 ```
 
-`async_measure` returns:
+It returns a `Measurement` with `weight_kg`, `impedance_ohm` and `display_unit`, or `None` if no stable weight arrives within 30 s. Weight is always in kg. `impedance_ohm` is `None` if impedance isn't measured, for example through socks or if you step off early.
 
-- `None` if no stable weight is received within 30 s.
-- A `Measurement` with `weight_kg` (0.01 kg resolution), `impedance_ohm` and `display_unit`. `impedance_ohm` is `None` if the scale can't measure impedance, for example through socks, or doesn't report it within 10 s, for example when you step off early. `display_unit` is the unit the scale was showing (`DisplayUnit.KG`, `LB` or `ST`); the weight is in kg either way.
+Pass `weight_only=True` to skip impedance (the Vitafit app's "Weight Only Mode"). The scale keeps this mode for later offline weigh-ins.
 
-`VitafitBluetoothDeviceData` wraps the same session for Home Assistant's `ActiveBluetoothProcessorCoordinator`.
+`VitafitBluetoothDeviceData` wraps the same session for Home Assistant; its `async_poll` passes `weight_only` through.
 
 See [usage](docs/usage.md) for details.
 
 ## Licence
 
-MIT
+MIT. The protocol is based on openScale's
+[VT701 handler](https://github.com/oliexdev/openScale/pull/1423).

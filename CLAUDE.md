@@ -15,7 +15,7 @@ It is used by the Home Assistant integration in the sibling repo `../ha-vitafit-
 Don't revisit these without asking.
 
 - Weight (kg) and whole-body impedance (Ω) only. No body composition or user profiles; downstream applications such as Home Assistant handle those.
-- `async_measure(display_unit=..., weight_only=...)` are optional. By default no unit command is sent, so the scale keeps its display unit, and the mode command selects normal mode. The HA integration doesn't set the display unit, but will need to control the mode (impedance or weight-only).
+- `async_measure(display_unit=..., weight_only=...)` are optional. By default no unit command is sent, so the scale keeps its display unit, and the mode command selects normal mode. The HA integration only sets the mode.
 - `async_poll(ble_device, **measure_kwargs)` passes keyword arguments through to `async_measure`. The owner chose a plain `**kwargs` over named parameters, so mypy doesn't check them.
 - No `homeassistant` imports. Use [`inkbird-ble`](https://github.com/Bluetooth-Devices/inkbird-ble) first as the template for structure, docs and code patterns. [`oralb-ble`](https://github.com/Bluetooth-Devices/oralb-ble) is the reference for the `BleakError` handling in `async_poll` and for the shape of `docs/protocol.md`.
 - Protocol source: openScale [PR #1423](https://github.com/oliexdev/openScale/pull/1423) (`VitafitVT701Handler.kt`). Treat it as correct, because the owner's scale works with openScale. Real captures have extended it; `docs/protocol.md` has the frames, timing and Vitafit app findings.
@@ -37,7 +37,6 @@ Deliberately different from the [Bluetooth-Devices](https://github.com/Bluetooth
 - Keep "is the frame intact" (`_is_valid`, including the per-type length in `FRAME_LENGTHS`) separate from "is the type decoded" (the `match` in `decode`). Replies to the mode, hello and unit commands are valid frames that `decode` ignores.
 - A failed impedance (`0xFFFF` in socks, `0x55AA` in weight-only mode, or out of range) must stay `ImpedanceFrame(impedance_ohm=None)`, not `None`. The session needs it to ack the frame and stop waiting.
 - Terminology: type `0x33` is the **mode command** (openScale's first hello) and `0x44` is an unknown request, referred to as the **hello command** (the scale's reply has one data byte, `00` so far). `start_commands()` yields both, then the optional unit command.
-- The mode command sets the measurement mode, which the scale keeps for later weigh-ins without a connection. `async_measure` sends it on every connection.
 - Log at debug level only, apart from the `BleakError` warning in `async_poll`.
 
 ## Commands
@@ -56,16 +55,6 @@ uv build
 
 Releases are published by `.github/workflows/release.yml` when a GitHub release is published. It uses PyPI trusted publishing, so no token is needed.
 
-One-off setup: on PyPI, add a pending trusted publisher with these settings:
-
-- Project `vitafit-ble`
-- Owner `jamesmyatt`
-- Repo `vitafit-ble`
-- Workflow `release.yml`
-- Environment `pypi`
-
-Create a matching `pypi` environment in the GitHub repo.
-
 To release:
 
 1. Bump `version` in `pyproject.toml`.
@@ -75,7 +64,5 @@ To release:
 
 ## Next steps
 
-1. Publish v0.1.0 (see Release).
-2. Import the GitHub repo on Read the Docs (`vitafit-ble.readthedocs.io`), and enable Renovate for it.
-3. Optionally, add the normal-mode impedance frames from the app capture (440 Ω and 445 Ω) to `tests/frames.py`.
-4. The only uncovered line is the "no stable weight" debug log in `parser.py`'s `async_poll`. It overlaps the session's own timeout log, so it could be removed or tested.
+1. Publish v0.1.0 (see Release). The docs are already live at `vitafit-ble.readthedocs.io` (imported 7 Oct 2026), and Renovate is opening PRs.
+2. The only uncovered line is the "no stable weight" debug log in `parser.py`'s `async_poll`. It overlaps the session's own timeout log, so it could be removed or tested.

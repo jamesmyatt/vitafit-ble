@@ -12,12 +12,6 @@ and is the library used by the
 [Vitafit Home Assistant integration](https://github.com/jamesmyatt/ha-vitafit-ble),
 but it can be used on its own.
 
-The entry point is the `VitafitBluetoothDeviceData` class:
-
-```python
-from vitafit_ble import VitafitBluetoothDeviceData
-```
-
 ## Detecting the scale (advertisement)
 
 The scale only advertises while it is awake, after someone steps on it. Its
@@ -41,12 +35,10 @@ if data.supported(service_info):
 
 ## Reading a weigh-in (connect and subscribe)
 
-The readings come over a GATT connection. `vitafit-ble` handles the connection
-for you via [Bleak](https://github.com/hbldh/bleak) and
+The readings come over a GATT connection. `async_poll()` connects for you via
+[Bleak](https://github.com/hbldh/bleak) and
 [`bleak-retry-connector`](https://github.com/Bluetooth-Devices/bleak-retry-connector);
-you only supply a `BLEDevice`.
-
-Check `poll_needed()` and call `async_poll()` with a `BLEDevice`:
+pass it a `BLEDevice` when `poll_needed()` is true:
 
 ```python
 if data.poll_needed(service_info, last_poll=None):
@@ -97,10 +89,9 @@ async with BleakClient(address) as client:
     measurement = await async_measure(client)
 ```
 
-`async_measure()` returns `None` if no stable weight arrives within 30 s.
-Otherwise it returns a `Measurement` with `weight_kg`, `impedance_ohm` and
-`display_unit`, the unit the scale was showing (`DisplayUnit.KG`, `LB` or
-`ST`). The weight is in kg whatever the display unit.
+It returns a `Measurement` with `weight_kg`, `impedance_ohm` and
+`display_unit` (the unit the scale was showing: `DisplayUnit.KG`, `LB` or
+`ST`), or `None` if no stable weight arrives within 30 s.
 
 To also set the scale's display unit, pass `display_unit`:
 
@@ -121,9 +112,8 @@ To weigh without passing any current through the body, as the Vitafit app's
 measurement = await async_measure(client, weight_only=True)
 ```
 
-`measurement.impedance_ohm` is then always `None`. Each weigh-in sets the
-mode, so without `weight_only` the scale measures impedance. The scale keeps
-the mode for later weigh-ins without a connection.
+`measurement.impedance_ohm` is then always `None`. The default is normal mode.
+The scale keeps the mode for later weigh-ins without a connection.
 
 ## Building a `BluetoothServiceInfoBleak` outside Home Assistant
 
