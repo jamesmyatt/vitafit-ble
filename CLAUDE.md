@@ -6,7 +6,7 @@ It is used by the Home Assistant integration in the sibling repo `../ha-vitafit-
 
 ## Status (7 Oct 2026)
 
-- One initial commit. Not yet on PyPI.
+- v0.1.0 released on PyPI on 7 Oct 2026 via `release.yml`, with docs at `vitafit-ble.readthedocs.io`. Renovate is enabled.
 - Tested on the owner's real VT701 with `scripts/capture.py`. The frames in `tests/frames.py` are real captures.
 - The Vitafit app's traffic was captured with Android HCI snoop logs, stored in a gitignored folder (`btsnoop_logs/`) because they include other devices' traffic.
 
@@ -64,5 +64,4 @@ To release:
 
 ## Next steps
 
-1. Publish v0.1.0 (see Release). The docs are already live at `vitafit-ble.readthedocs.io` (imported 7 Oct 2026), and Renovate is opening PRs.
-2. The only uncovered line is the "no stable weight" debug log in `parser.py`'s `async_poll`. It overlaps the session's own timeout log, so it could be removed or tested.
+1. The only uncovered line is the "no stable weight" debug log in `parser.py`'s `async_poll`. It overlaps the session's own timeout log, so it could be removed or tested.
