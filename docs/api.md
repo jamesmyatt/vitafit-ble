@@ -19,11 +19,11 @@ types that its updates use: `SensorUpdate`, `DeviceKey`, `SensorValue`,
 ```{eval-rst}
 .. autoclass:: vitafit_ble.VitafitBluetoothDeviceData
 
-   .. automethod:: supported
-   .. automethod:: update
-   .. autoproperty:: title
-   .. automethod:: poll_needed
-   .. automethod:: async_poll
+    .. automethod:: supported
+    .. automethod:: update
+    .. autoproperty:: title
+    .. automethod:: poll_needed
+    .. automethod:: async_poll
 ```
 
 ## Measurement session
@@ -35,7 +35,7 @@ connected. `async_poll()` uses it.
 .. autofunction:: vitafit_ble.async_measure
 
 .. autoclass:: vitafit_ble.Measurement
-   :members:
+    :members:
 ```
 
 ## Frame codec
@@ -48,14 +48,14 @@ for debugging and tests, such as `scripts/capture.py`; see
 .. autofunction:: vitafit_ble.protocol.decode
 
 .. autoclass:: vitafit_ble.protocol.WeightFrame
-   :members:
+    :members:
 
 .. autoclass:: vitafit_ble.protocol.ImpedanceFrame
-   :members:
+    :members:
 
 .. autoclass:: vitafit_ble.protocol.DisplayUnit
-   :members:
-   :undoc-members:
+    :members:
+    :undoc-members:
 
 .. autofunction:: vitafit_ble.protocol.unit_command
 ```

@@ -1,0 +1,3 @@
+# Store and check out every file exactly as it is: no line-ending conversion.
+# .editorconfig sets the line endings.
+* -text
