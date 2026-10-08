@@ -8,7 +8,8 @@ from unittest.mock import AsyncMock, patch
 
 from bleak.backends.device import BLEDevice
 from bleak.exc import BleakError
-from habluetooth import BluetoothServiceInfo
+from bluetooth_data_tools import monotonic_time_coarse
+from habluetooth import BluetoothServiceInfo, BluetoothServiceInfoBleak
 import pytest
 from sensor_state_data import DeviceKey
 
@@ -208,12 +209,37 @@ def test_supported() -> None:
     assert not VitafitBluetoothDeviceData().supported(service_info("Other"))
 
 
+def bleak_service_info(age: float) -> BluetoothServiceInfoBleak:
+    """Return an advertisement received ``age`` seconds ago."""
+    return BluetoothServiceInfoBleak(
+        name="Vitafit Body Fat",
+        address="AA:BB:CC:DD:EE:FF",
+        rssi=-60,
+        manufacturer_data={},
+        service_data={},
+        service_uuids=[],
+        source="local",
+        device=BLEDevice("AA:BB:CC:DD:EE:FF", "Vitafit Body Fat", None),
+        advertisement=None,
+        connectable=True,
+        time=monotonic_time_coarse() - age,
+        tx_power=None,
+    )
+
+
 def test_poll_needed() -> None:
     data = VitafitBluetoothDeviceData()
-    info = service_info("Vitafit Body Fat")
+    info = bleak_service_info(0)
     assert data.poll_needed(info, None)
     assert not data.poll_needed(info, 10)
     assert data.poll_needed(info, 61)
+
+
+def test_poll_needed_stale_advertisement() -> None:
+    data = VitafitBluetoothDeviceData()
+    info = bleak_service_info(10)
+    assert not data.poll_needed(info, None)
+    assert not data.poll_needed(info, 61)
 
 
 async def test_async_poll() -> None:

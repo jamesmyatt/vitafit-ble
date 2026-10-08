@@ -7,16 +7,22 @@ from typing import TYPE_CHECKING, Any
 
 from bleak.exc import BleakError
 from bleak_retry_connector import BleakClientWithServiceCache, establish_connection
-from bluetooth_data_tools import short_address
+from bluetooth_data_tools import monotonic_time_coarse, short_address
 from bluetooth_sensor_state_data import BluetoothData
 from sensor_state_data import SensorLibrary, SensorUpdate
 
-from .const import LOCAL_NAME_PREFIX, MANUFACTURER, MODEL, POLL_INTERVAL
+from .const import (
+    ADVERTISEMENT_MAX_AGE,
+    LOCAL_NAME_PREFIX,
+    MANUFACTURER,
+    MODEL,
+    POLL_INTERVAL,
+)
 from .session import async_measure
 
 if TYPE_CHECKING:
     from bleak.backends.device import BLEDevice
-    from habluetooth import BluetoothServiceInfo
+    from habluetooth import BluetoothServiceInfo, BluetoothServiceInfoBleak
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -36,7 +42,7 @@ class VitafitBluetoothDeviceData(BluetoothData):
 
     def poll_needed(
         self,
-        service_info: BluetoothServiceInfo,  # noqa: ARG002
+        service_info: BluetoothServiceInfoBleak,
         last_poll: float | None,
     ) -> bool:
         """Return True if the scale should be connected to.
@@ -44,9 +50,14 @@ class VitafitBluetoothDeviceData(BluetoothData):
         True for the first advertisement, then at most once every
         ``POLL_INTERVAL`` (60 s), so one weigh-in is read once. Safe to call on
         every advertisement. The scale only advertises while awake, i.e. after
-        being stepped on.
+        being stepped on, so the advertisement must also be at most
+        ``ADVERTISEMENT_MAX_AGE`` (5 s) old. This lets a timer call it with the
+        latest advertisement, which Home Assistant doesn't dispatch when it
+        repeats the previous one.
         """
-        return last_poll is None or last_poll > POLL_INTERVAL
+        return (last_poll is None or last_poll > POLL_INTERVAL) and (
+            monotonic_time_coarse() - service_info.time <= ADVERTISEMENT_MAX_AGE
+        )
 
     async def async_poll(
         self,

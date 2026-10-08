@@ -70,4 +70,6 @@ for debugging and tests, such as `scripts/capture.py`; see
 .. autodata:: vitafit_ble.const.IMPEDANCE_TIMEOUT
 
 .. autodata:: vitafit_ble.const.POLL_INTERVAL
+
+.. autodata:: vitafit_ble.const.ADVERTISEMENT_MAX_AGE
 ```

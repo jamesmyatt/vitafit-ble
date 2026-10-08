@@ -48,7 +48,10 @@ if data.poll_needed(service_info, last_poll=None):
 
 `poll_needed()` rate-limits itself, so it is safe to call on every
 advertisement: it returns `True` for the first advertisement and then at most
-once every 60 s, so one weigh-in is read once.
+once every 60 s, so one weigh-in is read once. It also needs a
+`BluetoothServiceInfoBleak` received within the last 5 s, so it is safe to call
+from a timer with the latest advertisement: it is `False` once the scale has
+gone back to sleep.
 
 `async_poll()` connects, subscribes to notifications, sends the start
 commands and waits up to 30 s for a stable weight. It then acknowledges the weight,

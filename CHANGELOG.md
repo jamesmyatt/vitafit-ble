@@ -8,6 +8,15 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-08
+
+### Changed
+
+- `poll_needed()` is also `False` unless the advertisement is at most
+  `ADVERTISEMENT_MAX_AGE` (5 s) old, so a timer can call it with the latest
+  advertisement without connecting to a sleeping scale. It now takes a
+  `BluetoothServiceInfoBleak`, which has the advertisement's `time`.
+
 ## [0.1.0] - 2026-10-07
 
 First release. Supports the Vitafit VT701 body fat scale, which advertises as
@@ -39,5 +48,6 @@ openScale's VT701 handler.
   `weight_only`, are passed to `async_measure()`.
 - Type hints (`py.typed`). Requires Python 3.11 or later.
 
-[Unreleased]: https://github.com/jamesmyatt/vitafit-ble/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/jamesmyatt/vitafit-ble/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/jamesmyatt/vitafit-ble/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/jamesmyatt/vitafit-ble/releases/tag/v0.1.0
