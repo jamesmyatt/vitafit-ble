@@ -51,6 +51,8 @@ uv sync --group docs && uv run sphinx-build -W -b html docs docs/_build/html
 uv build
 ```
 
+In CI, the pre-commit hooks run on [pre-commit.ci](https://pre-commit.ci) (configured by the `ci:` block in `.pre-commit-config.yaml`), as `pre-commit/action` recommends; `.github/workflows/ci.yml` only runs the tests.
+
 ## Release
 
 Releases are published by `.github/workflows/release.yml` when a GitHub release is published. It uses PyPI trusted publishing, so no token is needed.
