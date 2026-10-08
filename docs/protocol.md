@@ -42,10 +42,14 @@ The frames, in the order `vitafit-ble` runs them, after subscribing:
 | `0x11` `IMPEDANCE` | Scale → client | `5a 0b 26 11 00 00 00 00 00 <z_hi> <z_lo> <chk> aa`      | Impedance, Ω, big-endian. `0xFFFF` means the scale couldn't measure it, for example through socks; `0x55AA` means weight-only mode.                                                                                                                      |
 | `0x11` `IMPEDANCE` | Client → scale | `a5 05 26 11 00 32 aa`                                   | Acknowledge impedance                                                                                                                                                                                                                                    |
 
-Weight acknowledgement:
+Starting the impedance measurement:
 
-- openScale says acknowledging the stable weight starts the impedance
-  measurement; a normal-mode weigh-in without it hasn't been tried.
+- The scale only measures impedance while a client is connected. Without a
+  connection, a weigh-in gives the weight only.
+- Which part of the exchange starts it isn't known yet: the connection
+  itself, subscribing to notifications, the mode or hello command, or the
+  stable-weight acknowledgement. openScale says it is the acknowledgement; a
+  normal-mode weigh-in without it hasn't been tried.
 - The Vitafit app also acknowledges each settling frame
   (`a5 05 26 10 01 32 aa`); no effect has been seen.
 
