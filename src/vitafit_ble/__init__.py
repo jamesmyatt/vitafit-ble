@@ -1,29 +1,19 @@
 """Bluetooth library for Vitafit devices."""
 
-from sensor_state_data import (
-    DeviceClass,
-    DeviceKey,
-    SensorDescription,
-    SensorDeviceInfo,
-    SensorUpdate,
-    SensorValue,
-    Units,
-)
-
-from .parser import VitafitBluetoothDeviceData
-from .protocol import DisplayUnit
-from .session import Measurement, async_measure
+from .device import async_poll, device_name, poll_needed, supported
+from .protocol import DisplayUnit, Frame, ImpedanceFrame, WeightFrame
+from .session import Measurement, VitafitSession, async_measure
 
 __all__ = [
-    "DeviceClass",
-    "DeviceKey",
     "DisplayUnit",
+    "Frame",
+    "ImpedanceFrame",
     "Measurement",
-    "SensorDescription",
-    "SensorDeviceInfo",
-    "SensorUpdate",
-    "SensorValue",
-    "Units",
-    "VitafitBluetoothDeviceData",
+    "VitafitSession",
+    "WeightFrame",
     "async_measure",
+    "async_poll",
+    "device_name",
+    "poll_needed",
+    "supported",
 ]

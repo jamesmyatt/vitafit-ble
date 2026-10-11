@@ -3,36 +3,43 @@
 Auto-generated reference for `vitafit_ble`. For task-oriented examples, see
 [usage](usage.md).
 
-The package also re-exports the
-[`sensor-state-data`](https://github.com/Bluetooth-Devices/sensor-state-data)
-types that its updates use: `SensorUpdate`, `DeviceKey`, `SensorValue`,
-`SensorDescription`, `SensorDeviceInfo`, `DeviceClass` and `Units`. See
-`sensor-state-data` for those.
+## Device
 
-## Device data
-
-`VitafitBluetoothDeviceData` is the entry point. `supported()`, `update()` and
-`title` come from
-[`bluetooth-sensor-state-data`](https://github.com/Bluetooth-Devices/bluetooth-sensor-state-data)'s
-`BluetoothData`.
+`supported()` and `device_name()` work on advertisements. `poll_needed()` says
+when to connect, and `async_poll()` connects and runs a weigh-in.
 
 ```{eval-rst}
-.. autoclass:: vitafit_ble.VitafitBluetoothDeviceData
+.. autofunction:: vitafit_ble.supported
 
-    .. automethod:: supported
-    .. automethod:: update
-    .. autoproperty:: title
-    .. automethod:: poll_needed
-    .. automethod:: async_poll
+.. autofunction:: vitafit_ble.device_name
+
+.. autofunction:: vitafit_ble.poll_needed
+
+.. autofunction:: vitafit_ble.async_poll
 ```
 
 ## Measurement session
 
-`async_measure()` runs one weigh-in on a `BleakClient` you have already
-connected. `async_poll()` uses it.
+`async_measure()` runs one weigh-in with the default options on a connected
+`BleakClient`. For options or frame callbacks, use a `VitafitSession`.
 
 ```{eval-rst}
 .. autofunction:: vitafit_ble.async_measure
+
+.. autoclass:: vitafit_ble.VitafitSession
+
+    .. automethod:: register_callback
+    .. automethod:: async_measure
+    .. automethod:: on_send
+    .. automethod:: on_receive
+
+.. autoclass:: vitafit_ble.Frame
+
+.. autoclass:: vitafit_ble.WeightFrame
+    :members:
+
+.. autoclass:: vitafit_ble.ImpedanceFrame
+    :members:
 
 .. autoclass:: vitafit_ble.Measurement
     :members:
@@ -46,12 +53,6 @@ for debugging and tests, such as `scripts/capture.py`; see
 
 ```{eval-rst}
 .. autofunction:: vitafit_ble.protocol.decode
-
-.. autoclass:: vitafit_ble.protocol.WeightFrame
-    :members:
-
-.. autoclass:: vitafit_ble.protocol.ImpedanceFrame
-    :members:
 
 .. autoclass:: vitafit_ble.protocol.DisplayUnit
     :members:

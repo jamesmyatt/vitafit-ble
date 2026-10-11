@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from functools import partial
 import logging
 from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock, patch
@@ -11,17 +12,24 @@ from bleak.exc import BleakError
 from bluetooth_data_tools import monotonic_time_coarse
 from habluetooth import BluetoothServiceInfo, BluetoothServiceInfoBleak
 import pytest
-from sensor_state_data import DeviceKey
 
 from vitafit_ble import (
     DisplayUnit,
+    Frame,
     Measurement,
-    VitafitBluetoothDeviceData,
+    VitafitSession,
     async_measure,
+    async_poll,
+    device_name,
+    poll_needed,
+    supported,
 )
 from vitafit_ble.protocol import (
     ACK_IMPEDANCE,
     ACK_STABLE_WEIGHT,
+    ImpedanceFrame,
+    WeightFrame,
+    decode,
     start_commands,
     unit_command,
 )
@@ -44,6 +52,7 @@ KG = DisplayUnit.KG
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+
 
 START_COMMANDS = tuple(start_commands())
 # Everything the session sends, in order: no unit command, so the scale keeps its
@@ -134,7 +143,7 @@ async def test_set_display_unit(unit: DisplayUnit) -> None:
     The result reports the unit in the stable weight frame, here st.
     """
     client = FakeClient(first=SETTLING_ST, stable=STABLE_ST)
-    result = await async_measure(client, display_unit=unit)  # type: ignore[arg-type]
+    result = await async_measure(client, VitafitSession(display_unit=unit))  # type: ignore[arg-type]
     assert result == Measurement(87.2, impedance_ohm=466, display_unit=DisplayUnit.ST)
     assert client.written == [
         *START_COMMANDS,
@@ -155,7 +164,7 @@ async def test_first_frame_stable() -> None:
 async def test_impedance_failed() -> None:
     """In socks, the scale reports a failed impedance; return at once without it."""
     client = FakeClient(impedance=IMPEDANCE_FAILED)
-    result = await async_measure(client, impedance_timeout=1)  # type: ignore[arg-type]
+    result = await async_measure(client, VitafitSession(impedance_timeout=1))  # type: ignore[arg-type]
     assert result == Measurement(87.35, impedance_ohm=None, display_unit=KG)
     assert client.written == FULL_EXCHANGE
 
@@ -163,7 +172,7 @@ async def test_impedance_failed() -> None:
 async def test_weight_only() -> None:
     """Weight-only mode: the mode command selects it, and the scale skips impedance."""
     client = FakeClient()
-    result = await async_measure(client, weight_only=True)  # type: ignore[arg-type]
+    result = await async_measure(client, VitafitSession(weight_only=True))  # type: ignore[arg-type]
     assert result == Measurement(87.35, impedance_ohm=None, display_unit=KG)
     assert client.written == [
         *WEIGHT_ONLY_START_COMMANDS,
@@ -176,7 +185,7 @@ async def test_stepped_off_early(caplog: pytest.LogCaptureFixture) -> None:
     """Stepping off early: no impedance frame arrives."""
     client = FakeClient(impedance=None)
     with caplog.at_level(logging.DEBUG, logger="vitafit_ble.session"):
-        result = await async_measure(client, impedance_timeout=0.01)  # type: ignore[arg-type]
+        result = await async_measure(client, VitafitSession(impedance_timeout=0.01))  # type: ignore[arg-type]
     assert result == Measurement(87.35, impedance_ohm=None, display_unit=KG)
     assert ACK_IMPEDANCE not in client.written
     assert "No impedance within 0.01 s" in caplog.text
@@ -185,9 +194,102 @@ async def test_stepped_off_early(caplog: pytest.LogCaptureFixture) -> None:
 async def test_no_stable_weight(caplog: pytest.LogCaptureFixture) -> None:
     client = FakeClient(send_stable=False)
     with caplog.at_level(logging.DEBUG, logger="vitafit_ble.session"):
-        assert await async_measure(client, weight_timeout=0.01) is None  # type: ignore[arg-type]
+        assert await async_measure(client, VitafitSession(weight_timeout=0.01)) is None  # type: ignore[arg-type]
     assert ACK_STABLE_WEIGHT not in client.written
     assert "No stable weight within 0.01 s" in caplog.text
+
+
+class HookSession(VitafitSession):
+    """Record every raw hook and frame callback."""
+
+    def __init__(self, *, weight_only: bool = False) -> None:
+        super().__init__(weight_only=weight_only)
+        self.events: list[tuple[str, object]] = []
+        self.register_callback(WeightFrame, partial(self._record, "weight"))
+        self.register_callback(ImpedanceFrame, partial(self._record, "impedance"))
+        self.register_callback(Frame, partial(self._record, "frame"))
+
+    def on_send(self, data: bytes) -> None:
+        self.events.append(("send", data))
+
+    def on_receive(self, data: bytes) -> None:
+        self.events.append(("receive", data))
+
+    def _record(self, kind: str, frame: Frame) -> None:
+        self.events.append((kind, frame))
+
+
+def _received(data: bytes) -> list[tuple[str, object]]:
+    """Return the hook and callback calls for one notification."""
+    frame = decode(data)
+    events: list[tuple[str, object]] = [("receive", data)]
+    if frame is not None:
+        # The frame's own class first, then Frame.
+        kind = "weight" if isinstance(frame, WeightFrame) else "impedance"
+        events += [(kind, frame), ("frame", frame)]
+    return events
+
+
+async def test_async_measure_session() -> None:
+    """The session's options and callbacks are used for the weigh-in."""
+    client = FakeClient()
+    session = HookSession(weight_only=True)
+    result = await async_measure(client, session)  # type: ignore[arg-type]
+    assert result == Measurement(87.35, impedance_ohm=None, display_unit=KG)
+    assert client.written[0] == WEIGHT_ONLY_START_COMMANDS[0]
+    assert ("weight", decode(SETTLING)) in session.events
+
+
+async def test_session_hooks() -> None:
+    """The hooks and callbacks see every frame in order, including late ones."""
+    client = FakeClient()
+    session = HookSession()
+    result = await session.async_measure(client)  # type: ignore[arg-type]
+    assert result == Measurement(87.35, impedance_ohm=466, display_unit=KG)
+    mode, hello = START_COMMANDS
+    assert session.events == [
+        ("send", mode),
+        *_received(START_REPLIES[0]),
+        ("send", hello),
+        *_received(START_REPLIES[1]),
+        *_received(SETTLING),
+        *_received(STABLE),
+        ("send", ACK_STABLE_WEIGHT),
+        *_received(STABLE),
+        *_received(IMPEDANCE),
+        ("send", ACK_IMPEDANCE),
+    ]
+
+    # Notifications after the weigh-in still reach them.
+    session.events.clear()
+    client._notify(STABLE)
+    assert session.events == _received(STABLE)
+
+
+async def test_multiple_callbacks() -> None:
+    """Several callbacks for one frame type run in the order registered."""
+    calls: list[tuple[str, WeightFrame]] = []
+    session = VitafitSession()
+    session.register_callback(WeightFrame, partial(_append, calls, "first"))
+    session.register_callback(WeightFrame, partial(_append, calls, "second"))
+    await async_measure(FakeClient(), session)  # type: ignore[arg-type]
+    settling = decode(SETTLING)
+    assert calls[:2] == [("first", settling), ("second", settling)]
+
+
+def _append(
+    calls: list[tuple[str, WeightFrame]], name: str, frame: WeightFrame
+) -> None:
+    calls.append((name, frame))
+
+
+async def test_unregister_callback() -> None:
+    weights: list[WeightFrame] = []
+    session = VitafitSession()
+    unregister = session.register_callback(WeightFrame, weights.append)
+    unregister()
+    await async_measure(FakeClient(), session)  # type: ignore[arg-type]
+    assert weights == []
 
 
 def service_info(name: str) -> BluetoothServiceInfo:
@@ -203,10 +305,12 @@ def service_info(name: str) -> BluetoothServiceInfo:
 
 
 def test_supported() -> None:
-    data = VitafitBluetoothDeviceData()
-    assert data.supported(service_info("Vitafit Body Fat"))
-    assert data.title == "Vitafit VT701 EEFF"
-    assert not VitafitBluetoothDeviceData().supported(service_info("Other"))
+    assert supported(service_info("Vitafit Body Fat"))
+    assert not supported(service_info("Other"))
+
+
+def test_device_name() -> None:
+    assert device_name("AA:BB:CC:DD:EE:FF") == "Vitafit VT701 EEFF"
 
 
 def bleak_service_info(age: float) -> BluetoothServiceInfoBleak:
@@ -228,58 +332,52 @@ def bleak_service_info(age: float) -> BluetoothServiceInfoBleak:
 
 
 def test_poll_needed() -> None:
-    data = VitafitBluetoothDeviceData()
     info = bleak_service_info(0)
-    assert data.poll_needed(info, None)
-    assert not data.poll_needed(info, 10)
-    assert data.poll_needed(info, 61)
+    assert poll_needed(info, None)
+    assert not poll_needed(info, 10)
+    assert poll_needed(info, 61)
 
 
 def test_poll_needed_stale_advertisement() -> None:
-    data = VitafitBluetoothDeviceData()
     info = bleak_service_info(10)
-    assert not data.poll_needed(info, None)
-    assert not data.poll_needed(info, 61)
+    assert not poll_needed(info, None)
+    assert not poll_needed(info, 61)
+
+
+BLE_DEVICE = BLEDevice("AA:BB:CC:DD:EE:FF", "Vitafit Body Fat", None)
 
 
 async def test_async_poll() -> None:
-    data = VitafitBluetoothDeviceData()
-    data.update(service_info("Vitafit Body Fat"))
     client = FakeClient()
-    device = BLEDevice("AA:BB:CC:DD:EE:FF", "Vitafit Body Fat", None)
     with patch(
-        "vitafit_ble.parser.establish_connection", AsyncMock(return_value=client)
+        "vitafit_ble.device.establish_connection", AsyncMock(return_value=client)
     ):
-        update = await data.async_poll(device)
+        measurement = await async_poll(BLE_DEVICE)
     client.disconnect.assert_awaited_once()
-    assert update.entity_values[DeviceKey("mass")].native_value == 87.35
-    assert update.entity_values[DeviceKey("impedance")].native_value == 466
+    assert measurement == Measurement(87.35, impedance_ohm=466, display_unit=KG)
 
 
-async def test_async_poll_weight_only() -> None:
-    """Options are passed to async_measure."""
-    data = VitafitBluetoothDeviceData()
-    data.update(service_info("Vitafit Body Fat"))
+async def test_async_poll_session() -> None:
+    """The session's options and callbacks are used for the weigh-in."""
+    weights: list[WeightFrame] = []
+    session = VitafitSession(weight_only=True)
+    session.register_callback(WeightFrame, weights.append)
     client = FakeClient()
-    device = BLEDevice("AA:BB:CC:DD:EE:FF", "Vitafit Body Fat", None)
     with patch(
-        "vitafit_ble.parser.establish_connection", AsyncMock(return_value=client)
+        "vitafit_ble.device.establish_connection", AsyncMock(return_value=client)
     ):
-        update = await data.async_poll(device, weight_only=True)
+        measurement = await async_poll(BLE_DEVICE, session)
     assert client.written[0] == WEIGHT_ONLY_START_COMMANDS[0]
-    assert update.entity_values[DeviceKey("mass")].native_value == 87.35
-    assert update.entity_values[DeviceKey("impedance")].native_value is None
+    assert measurement == Measurement(87.35, impedance_ohm=None, display_unit=KG)
+    assert weights[0] == decode(SETTLING)
 
 
-async def test_async_poll_bleak_error() -> None:
-    data = VitafitBluetoothDeviceData()
-    data.update(service_info("Vitafit Body Fat"))
+async def test_async_poll_bleak_error(caplog: pytest.LogCaptureFixture) -> None:
     client = FakeClient()
     client.start_notify = AsyncMock(side_effect=BleakError("disconnected"))  # type: ignore[method-assign]
-    device = BLEDevice("AA:BB:CC:DD:EE:FF", "Vitafit Body Fat", None)
     with patch(
-        "vitafit_ble.parser.establish_connection", AsyncMock(return_value=client)
+        "vitafit_ble.device.establish_connection", AsyncMock(return_value=client)
     ):
-        update = await data.async_poll(device)
+        assert await async_poll(BLE_DEVICE) is None
     client.disconnect.assert_awaited_once()
-    assert DeviceKey("mass") not in update.entity_values
+    assert "weigh-in failed: disconnected" in caplog.text

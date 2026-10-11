@@ -8,6 +8,39 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-11
+
+### Added
+
+- `VitafitSession`: the weigh-in options and callbacks.
+  `register_callback(frame_type, callback)` gets each decoded `WeightFrame` or
+  `ImpedanceFrame`, or both with `Frame`, for example for the live weight.
+  Override `on_send()` and `on_receive()` for the raw bytes.
+- `Frame`, the base class of `WeightFrame` and `ImpedanceFrame`. All three are
+  exported from `vitafit_ble`.
+- `supported()` and `device_name()` for advertisements.
+
+### Changed
+
+- `async_measure()` takes an optional `VitafitSession` instead of keyword
+  arguments. The options are unchanged; use
+  `VitafitSession(weight_only=True).async_measure(client)`.
+- `poll_needed()` and `async_poll()` are now functions; they were
+  `VitafitBluetoothDeviceData` methods. `async_poll()` takes an optional
+  `VitafitSession` instead of keyword arguments, and returns a `Measurement`
+  instead of a `SensorUpdate`, or `None` if no stable weight arrives or the
+  connection drops during the weigh-in.
+- `scripts/capture.py` logs through `VitafitSession`. Decoded frames are now
+  separate `frame` events, not a `decoded` field on `rx` events.
+
+### Removed
+
+- `VitafitBluetoothDeviceData`; use the `supported()`, `device_name()`,
+  `poll_needed()` and `async_poll()` functions.
+- The `bluetooth-sensor-state-data` and `sensor-state-data` dependencies, and
+  the re-exported `SensorUpdate`, `DeviceKey`, `SensorValue`,
+  `SensorDescription`, `SensorDeviceInfo`, `DeviceClass` and `Units`.
+
 ## [0.2.0] - 2026-10-08
 
 ### Changed
@@ -48,6 +81,7 @@ openScale's VT701 handler.
   `weight_only`, are passed to `async_measure()`.
 - Type hints (`py.typed`). Requires Python 3.11 or later.
 
-[Unreleased]: https://github.com/jamesmyatt/vitafit-ble/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/jamesmyatt/vitafit-ble/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/jamesmyatt/vitafit-ble/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/jamesmyatt/vitafit-ble/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/jamesmyatt/vitafit-ble/releases/tag/v0.1.0

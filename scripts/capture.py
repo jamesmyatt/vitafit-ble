@@ -24,22 +24,24 @@ import logging
 from pathlib import Path
 import sys
 import time
-from typing import TYPE_CHECKING, Any, TextIO, cast
+from typing import TYPE_CHECKING, Any, TextIO
 
 from bleak import BleakScanner
 from bleak.exc import BleakError
 from bleak_retry_connector import BleakClientWithServiceCache, establish_connection
 from habluetooth import BluetoothServiceInfoBleak
 
-from vitafit_ble import DisplayUnit, VitafitBluetoothDeviceData, async_measure
-from vitafit_ble.const import IMPEDANCE_TIMEOUT, LOCAL_NAME_PREFIX, WEIGHT_TIMEOUT
-from vitafit_ble.protocol import decode
+from vitafit_ble import DisplayUnit, Frame, VitafitSession, supported
+from vitafit_ble.const import (
+    IMPEDANCE_TIMEOUT,
+    LOCAL_NAME_PREFIX,
+    NOTIFY_CHARACTERISTIC_UUID,
+    WEIGHT_TIMEOUT,
+    WRITE_CHARACTERISTIC_UUID,
+)
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
-
     from bleak import BleakClient
-    from bleak.backends.characteristic import BleakGATTCharacteristic
     from bleak.backends.device import BLEDevice
     from bleak.backends.scanner import AdvertisementData
 
@@ -69,53 +71,37 @@ class Recorder:
         self._file.flush()
 
 
-class RecordingClient:
-    """Wrap a BleakClient to log every frame `async_measure` sends and receives."""
+class RecordingSession(VitafitSession):
+    """Log every frame the weigh-in sends and receives."""
 
-    def __init__(self, client: BleakClient, recorder: Recorder) -> None:
-        """Wrap a connected client."""
-        self._client = client
-        self._recorder = recorder
-
-    def _frame(self, direction: str, characteristic: str, data: bytes) -> None:
-        decoded = decode(data) if direction == "rx" else None
-        _LOGGER.info(
-            "%s %s %s%s",
-            direction.upper(),
-            characteristic[4:8],
-            data.hex(" "),
-            f" {decoded}" if decoded else "",
-        )
-        self._recorder.record(
-            direction,
-            characteristic=characteristic,
-            data=data.hex(),
-            decoded=(
-                {"type": type(decoded).__name__, **dataclasses.asdict(decoded)}
-                if decoded
-                else None
-            ),
-        )
-
-    async def start_notify(
+    def __init__(
         self,
-        characteristic: str,
-        callback: Callable[[BleakGATTCharacteristic, bytearray], None],
+        recorder: Recorder,
+        **options: Any,  # noqa: ANN401
     ) -> None:
-        """Subscribe, logging each notification before passing it on."""
+        """Prepare a weigh-in that records to ``recorder``."""
+        super().__init__(**options)
+        self._recorder = recorder
+        self.register_callback(Frame, self._on_frame)
 
-        def _callback(sender: BleakGATTCharacteristic, data: bytearray) -> None:
-            self._frame("rx", characteristic, bytes(data))
-            callback(sender, data)
+    def on_send(self, data: bytes) -> None:
+        """Log a command."""
+        self._raw("tx", WRITE_CHARACTERISTIC_UUID, data)
 
-        await self._client.start_notify(characteristic, _callback)
+    def on_receive(self, data: bytes) -> None:
+        """Log a notification."""
+        self._raw("rx", NOTIFY_CHARACTERISTIC_UUID, data)
 
-    async def write_gatt_char(
-        self, characteristic: str, data: bytes, *, response: bool
-    ) -> None:
-        """Log a command, then write it."""
-        self._frame("tx", characteristic, data)
-        await self._client.write_gatt_char(characteristic, data, response=response)
+    def _on_frame(self, frame: Frame) -> None:
+        """Log a decoded frame, after its notification."""
+        _LOGGER.info("    %s", frame)
+        self._recorder.record(
+            "frame", type=type(frame).__name__, **dataclasses.asdict(frame)
+        )
+
+    def _raw(self, direction: str, characteristic: str, data: bytes) -> None:
+        _LOGGER.info("%s %s %s", direction.upper(), characteristic[4:8], data.hex(" "))
+        self._recorder.record(direction, characteristic=characteristic, data=data.hex())
 
 
 def _service_info(
@@ -156,15 +142,13 @@ async def _async_scan(
                 return
         elif not name.startswith(name_prefix):
             return
-        supported = VitafitBluetoothDeviceData().supported(
-            _service_info(device, advertisement)
-        )
+        is_supported = supported(_service_info(device, advertisement))
         _LOGGER.info(
             "ADV %s %r rssi=%s supported=%s manufacturer=%s service_data=%s uuids=%s",
             device.address,
             name,
             advertisement.rssi,
-            supported,
+            is_supported,
             {k: v.hex() for k, v in advertisement.manufacturer_data.items()},
             {k: v.hex() for k, v in advertisement.service_data.items()},
             advertisement.service_uuids,
@@ -180,7 +164,7 @@ async def _async_scan(
             },
             service_data={k: v.hex() for k, v in advertisement.service_data.items()},
             service_uuids=advertisement.service_uuids,
-            supported=supported,
+            supported=is_supported,
         )
         if not found.done():
             found.set_result(device)
@@ -202,7 +186,9 @@ class WeighInOptions:
     """Options for one weigh-in."""
 
     weight_timeout: float
+    """Seconds to wait for a stable weight."""
     impedance_timeout: float
+    """Seconds to wait for impedance after the ack."""
     linger: float
     """Seconds to keep listening after the weigh-in."""
     unit: DisplayUnit | None
@@ -244,13 +230,14 @@ async def _async_weigh_in(
                     characteristic=char.uuid,
                     properties=char.properties,
                 )
-        measurement = await async_measure(
-            cast("BleakClient", RecordingClient(client, recorder)),
+        session = RecordingSession(
+            recorder,
             weight_timeout=options.weight_timeout,
             impedance_timeout=options.impedance_timeout,
             display_unit=options.unit,
             weight_only=options.weight_only,
         )
+        measurement = await session.async_measure(client)
         _LOGGER.info("Result: %s", measurement)
         recorder.record(
             "result",

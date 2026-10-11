@@ -20,13 +20,17 @@ async with BleakClient(address) as client:
     measurement = await async_measure(client)
 ```
 
-It returns a `Measurement` with `weight_kg`, `impedance_ohm` and `display_unit`, or `None` if no stable weight arrives within 30 s. Weight is always in kg. `impedance_ohm` is `None` if impedance isn't measured, for example through socks or if you step off early.
+It returns a `Measurement` with `weight_kg` (always kg), `impedance_ohm` and `display_unit`, or `None` if no stable weight arrives within 30 s. `impedance_ohm` is `None` if impedance isn't measured, for example through socks or if you step off early.
 
-Pass `weight_only=True` to skip impedance (the Vitafit app's "Weight Only Mode"). The scale keeps this mode for later offline weigh-ins.
+For options or callbacks, such as the live weight, use a `VitafitSession`. For example, the Vitafit app's "Weight Only Mode" skips impedance, and the scale keeps it for later offline weigh-ins:
 
-`VitafitBluetoothDeviceData` wraps the same session for Home Assistant; its `async_poll` passes `weight_only` through.
+```python
+from vitafit_ble import VitafitSession
 
-See [usage](docs/usage.md) for details.
+measurement = await VitafitSession(weight_only=True).async_measure(client)
+```
+
+For Home Assistant, `poll_needed()` says when to connect, and `async_poll()` connects, runs a weigh-in and disconnects. See [usage](docs/usage.md) for details.
 
 ## Licence
 

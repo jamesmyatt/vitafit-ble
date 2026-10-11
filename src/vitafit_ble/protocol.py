@@ -17,7 +17,7 @@ from operator import xor
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Iterator
+    from collections.abc import Callable, Iterable, Iterator
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -69,7 +69,8 @@ class FrameType(IntEnum):
 
 
 # Total length of each scale-to-client frame type that decode() reads.
-FRAME_LENGTHS: dict[int, int] = {FrameType.WEIGHT: 12, FrameType.IMPEDANCE: 13}
+WEIGHT_FRAME_LENGTH = 12
+IMPEDANCE_FRAME_LENGTH = 13
 
 
 class ImpedanceCode(IntEnum):
@@ -90,7 +91,12 @@ class DisplayUnit(IntEnum):
 
 
 @dataclass(frozen=True, slots=True)
-class WeightFrame:
+class Frame:
+    """Base class for decoded scale-to-client frames."""
+
+
+@dataclass(frozen=True, slots=True)
+class WeightFrame(Frame):
     """Live weight reading."""
 
     weight_kg: float
@@ -102,7 +108,7 @@ class WeightFrame:
 
 
 @dataclass(frozen=True, slots=True)
-class ImpedanceFrame:
+class ImpedanceFrame(Frame):
     """Whole-body impedance reading."""
 
     impedance_ohm: int | None
@@ -146,27 +152,20 @@ ACK_IMPEDANCE = encode_command(FrameType.IMPEDANCE, b"\x00")
 
 
 def _is_valid(frame: bytes) -> bool:
-    if not (
+    return (
         len(frame) >= MIN_FRAME_LENGTH
         and frame[0] == HEADER_SCALE
         and frame[1] == len(frame) - 2
         and frame[2] == PRODUCT_ID
         and frame[-1] == TRAILER
         and _checksum(frame[1:-2]) == frame[-2]
-    ):
-        return False
-    expected = FRAME_LENGTHS.get(frame[3])
-    if expected is not None and len(frame) != expected:
-        _LOGGER.debug(
-            "%s frame has wrong length: %s",
-            FrameType(frame[3]).name.capitalize(),
-            frame.hex(" "),
-        )
-        return False
-    return True
+    )
 
 
-def _decode_weight(frame: bytes) -> WeightFrame:
+def _decode_weight(frame: bytes) -> WeightFrame | None:
+    if len(frame) != WEIGHT_FRAME_LENGTH:
+        _LOGGER.debug("Weight frame has wrong length: %s", frame.hex(" "))
+        return None
     raw = int.from_bytes(frame[8:10], "big")
     try:
         display_unit: DisplayUnit | None = DisplayUnit(frame[7] - UNIT_BASE)
@@ -179,7 +178,10 @@ def _decode_weight(frame: bytes) -> WeightFrame:
     )
 
 
-def _decode_impedance(frame: bytes) -> ImpedanceFrame:
+def _decode_impedance(frame: bytes) -> ImpedanceFrame | None:
+    if len(frame) != IMPEDANCE_FRAME_LENGTH:
+        _LOGGER.debug("Impedance frame has wrong length: %s", frame.hex(" "))
+        return None
     ohm = int.from_bytes(frame[9:11], "big")
     match ohm:
         case ImpedanceCode.FAILED:
@@ -194,13 +196,17 @@ def _decode_impedance(frame: bytes) -> ImpedanceFrame:
     return ImpedanceFrame(impedance_ohm=None)
 
 
+# Decoder for each frame type that decode() turns into a Frame. Other valid
+# frames, such as the command replies, aren't decoded.
+_DECODERS: dict[int, Callable[[bytes], WeightFrame | ImpedanceFrame | None]] = {
+    FrameType.WEIGHT: _decode_weight,
+    FrameType.IMPEDANCE: _decode_impedance,
+}
+
+
 def decode(frame: bytes) -> WeightFrame | ImpedanceFrame | None:
     """Decode a scale-to-client frame; return None if invalid or unrecognised."""
     if not _is_valid(frame):
         return None
-    match frame[3]:
-        case FrameType.WEIGHT:
-            return _decode_weight(frame)
-        case FrameType.IMPEDANCE:
-            return _decode_impedance(frame)
-    return None
+    decoder = _DECODERS.get(frame[3])
+    return decoder(frame) if decoder else None

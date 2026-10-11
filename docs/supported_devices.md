@@ -1,20 +1,20 @@
 # Supported devices
 
-`VitafitBluetoothDeviceData` detects the scale from its advertisement; there is
-no model selection.
+`supported()` detects the scale from its advertisement; there is no model
+selection.
 
-| Model   | Family         | Transport | Detection                                              | Sensors                                  |
-| ------- | -------------- | --------- | ------------------------------------------------------ | ---------------------------------------- |
-| `VT701` | Body fat scale | GATT poll | local name starting `Vitafit`, e.g. `Vitafit Body Fat` | weight (kg), impedance (Ω), display unit |
+| Model   | Family         | Transport | Detection                                              | Sensors                                               |
+| ------- | -------------- | --------- | ------------------------------------------------------ | ----------------------------------------------------- |
+| `VT701` | Body fat scale | GATT poll | local name starting `Vitafit`, e.g. `Vitafit Body Fat` | live weight, weight (kg), impedance (Ω), display unit |
 
 This library has been tested with a real VT701, and its test suite uses frames
 captured from it. See [Protocol](protocol.md) for where the protocol comes from.
 
 ## Transport guide
 
-- **GATT poll**: the scale's advertisement carries no readings, so
-  `async_poll()` connects and runs a weigh-in. See [Usage](usage.md) for the
-  sequence and [Protocol](protocol.md) for the frames.
+- **GATT poll**: the advertisement carries no readings, so `async_poll()`
+  connects and runs a weigh-in. See [Usage](usage.md) for the sequence and
+  [Protocol](protocol.md) for the frames.
 
 ## Not supported
 

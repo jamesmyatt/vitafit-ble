@@ -35,7 +35,7 @@ The frames, in the order `vitafit-ble` runs them, after subscribing:
 | `0x33` `MODE`      | Scale → client | `5a 04 26 33 11 aa`                                      | Reply, the same for either mode. Not decoded.                                                                                                                                                                                                            |
 | `0x44` `HELLO`     | Client → scale | `a5 04 26 44 66 aa`                                      | Unknown request, referred to as the hello command.                                                                                                                                                                                                       |
 | `0x44` `HELLO`     | Scale → client | `5a 05 26 44 00 67 aa`                                   | Reply: one data byte of unknown meaning, `00` in every capture so far. Not decoded.                                                                                                                                                                      |
-| `0x17` `UNIT`      | Client → scale | `a5 05 26 17 <code> <chk> aa`                            | Optional: set the display unit, `code` 01 kg, 02 lb, 03 st. Only sent when `async_measure()` is given `display_unit`.                                                                                                                                    |
+| `0x17` `UNIT`      | Client → scale | `a5 05 26 17 <code> <chk> aa`                            | Optional: set the display unit, `code` 01 kg, 02 lb, 03 st. Only sent when `VitafitSession` is given `display_unit`.                                                                                                                                     |
 | `0x17` `UNIT`      | Scale → client | `5a 04 26 17 35 aa`                                      | Reply, the same for every unit. Not decoded.                                                                                                                                                                                                             |
 | `0x10` `WEIGHT`    | Scale → client | `5a 0a 26 10 <flag> 00 00 <unit> <w_hi> <w_lo> <chk> aa` | Weight, 0.01 kg, big-endian, whatever the display unit. `flag` is 0x00 with no load, 0x01 while measuring and 0x02 when stable. `unit` is 0x20 + the display unit: 0x21 kg, 0x22 lb, 0x23 st. Streamed throughout, from as soon as notifications are on. |
 | `0x10` `WEIGHT`    | Client → scale | `a5 05 26 10 <flag> <chk> aa`                            | Acknowledge a weight frame, echoing its `flag`. `vitafit-ble` only acknowledges the stable weight (`a5 05 26 10 02 31 aa`); see below.                                                                                                                   |
@@ -111,9 +111,9 @@ command is optional. The frames on this page and the test vectors in
 
 `scripts/capture.py` records a real weigh-in for testing and debugging. It
 scans for the scale, logs each advertisement and whether `vitafit-ble`
-recognises it, then connects, lists the GATT services, and runs
-`async_measure()`, logging every frame sent (`TX`) and received (`RX`) with
-its decoded value. It keeps listening for a couple of seconds afterwards
+recognises it, then connects, lists the GATT services, and runs a
+`VitafitSession`, logging every frame sent (`TX`) and received (`RX`), and
+each decoded frame after it. It keeps listening for a couple of seconds afterwards
 (`--linger`) to catch any late frames, and logs who ends the connection,
 the scale or the script. With `--rescan SECONDS`, it then scans again to show
 how long the scale keeps advertising. Each event is also written to a JSON

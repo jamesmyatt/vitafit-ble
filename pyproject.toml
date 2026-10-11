@@ -4,7 +4,7 @@ build-backend = "uv_build"
 
 [project]
 name = "vitafit-ble"
-version = "0.2.0"
+version = "0.3.0"
 description = "Bluetooth library for Vitafit devices"
 readme = "README.md"
 license = "MIT"
@@ -22,9 +22,7 @@ dependencies = [
   "bleak>=1.0",
   "bleak-retry-connector>=4.0",
   "bluetooth-data-tools>=1.28",
-  "bluetooth-sensor-state-data>=1.9",
   "habluetooth>=3.42.0",
-  "sensor-state-data>=2.20",
 ]
 
 [project.urls]

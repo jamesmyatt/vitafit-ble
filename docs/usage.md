@@ -2,128 +2,110 @@
 
 # Usage
 
-See [Supported devices](supported_devices.md) for the recognised model and the
-transport it uses.
+`vitafit-ble` reads one weigh-in from a Vitafit scale over GATT, with the live
+weight as you stand on it. The
+[Vitafit Home Assistant integration](https://github.com/jamesmyatt/ha-vitafit-ble)
+uses it. See [Supported devices](supported_devices.md) for the models.
 
-`vitafit-ble` connects to a Vitafit scale over GATT, runs one weigh-in, and
-turns the result into structured sensor values. It is built on top of
-[`bluetooth-sensor-state-data`](https://github.com/Bluetooth-Devices/bluetooth-sensor-state-data)
-and is the library used by the
-[Vitafit Home Assistant integration](https://github.com/jamesmyatt/ha-vitafit-ble),
-but it can be used on its own.
+## Detecting the scale
 
-## Detecting the scale (advertisement)
-
-The scale only advertises while it is awake, after someone steps on it. Its
-advertisement identifies the scale but carries no readings. Feed each
-advertisement to `update()` and you get a `SensorUpdate` back with the device
-details and signal strength:
+The scale only advertises while it's awake, after someone steps on it. The
+advertisement identifies it but carries no readings:
 
 ```python
-from vitafit_ble import VitafitBluetoothDeviceData
+from vitafit_ble import device_name, supported
 
-# `service_info` is a habluetooth `BluetoothServiceInfoBleak`. Inside Home
-# Assistant you receive one for every advertisement; standalone you can build
-# one from a Bleak scan (see below).
-data = VitafitBluetoothDeviceData()
-
-if data.supported(service_info):
-    update = data.update(service_info)
-    print(data.title)  # e.g. Vitafit VT701 EEFF
-    print(update.entity_values)
+# service_info is a habluetooth BluetoothServiceInfoBleak (see below).
+if supported(service_info):
+    print(device_name(service_info.address))  # e.g. Vitafit VT701 EEFF
 ```
 
-## Reading a weigh-in (connect and subscribe)
+## Reading a weigh-in
 
-The readings come over a GATT connection. `async_poll()` connects for you via
-[Bleak](https://github.com/hbldh/bleak) and
-[`bleak-retry-connector`](https://github.com/Bluetooth-Devices/bleak-retry-connector);
-pass it a `BLEDevice` when `poll_needed()` is true:
+`async_poll()` connects with
+[`bleak-retry-connector`](https://github.com/Bluetooth-Devices/bleak-retry-connector),
+runs a weigh-in and disconnects. Call it when `poll_needed()` is true:
 
 ```python
-if data.poll_needed(service_info, last_poll=None):
-    update = await data.async_poll(ble_device)
-    print(update.entity_values)
+from vitafit_ble import async_poll, poll_needed
+
+if poll_needed(service_info, last_poll=None):
+    measurement = await async_poll(ble_device)
+# Measurement(weight_kg=87.35, impedance_ohm=466, display_unit=<DisplayUnit.KG: 1>)
 ```
 
-`poll_needed()` rate-limits itself, so it is safe to call on every
-advertisement: it returns `True` for the first advertisement and then at most
-once every 60 s, so one weigh-in is read once. It also needs a
-`BluetoothServiceInfoBleak` received within the last 5 s, so it is safe to call
-from a timer with the latest advertisement: it is `False` once the scale has
-gone back to sleep.
+`poll_needed()` is true for the first advertisement, then at most once every
+60 s, so a weigh-in is read once. The advertisement must also be at most 5 s
+old, so it's safe to call from a timer: it's false once the scale sleeps.
 
-`async_poll()` connects, subscribes to notifications, sends the start
-commands and waits up to 30 s for a stable weight. It then acknowledges the weight,
-waits up to 10 s for the impedance, and disconnects. The scale keeps its
-display unit (kg, lb or st); the weight is always in kg. See
-[Protocol](protocol.md) for the frames.
+The weigh-in waits up to 30 s for a stable weight, acknowledges it, then waits
+up to 10 s for impedance. The weight is always in kg, whatever the scale
+displays. `impedance_ohm` is `None` if the scale can't measure it, for example
+through socks, or you step off early. If no stable weight arrives, or the
+connection drops, `async_poll()` returns `None` and logs it. If it can't
+connect, it raises `BleakError`.
 
-Keyword arguments to `async_poll()` are passed to `async_measure()` (see
-below), for example `await data.async_poll(ble_device, weight_only=True)`.
+If you already have a connected `BleakClient`, use `async_measure(client)`
+instead. See [Protocol](protocol.md) for the frames.
 
-`async_poll()` returns a `SensorUpdate` whose `entity_values` maps each
-`DeviceKey` to a `SensorValue` (weight in kg, impedance in Ω, signal strength
-in dBm):
+## Options
+
+Create a `VitafitSession` with the options, and call its `async_measure()` with
+the client, or pass it to `async_poll()`:
 
 ```python
-for device_key, sensor_value in update.entity_values.items():
-    print(device_key.key, sensor_value.native_value)
-# signal_strength -60
-# mass 87.35
-# impedance 466
+from vitafit_ble import DisplayUnit, VitafitSession
+
+measurement = await VitafitSession(weight_only=True).async_measure(client)
+measurement = await async_poll(ble_device, VitafitSession(display_unit=DisplayUnit.ST))
 ```
 
-`impedance` is `None` if the scale can't measure it, for example through
-socks, or doesn't report it within 10 s, for example when you step off early. If no stable weight arrives, or
-the Bluetooth connection fails, the update has no `mass` or `impedance`; the
-failure is logged.
+- `weight_only=True` selects the Vitafit app's "Weight Only Mode", which passes
+  no current, so `impedance_ohm` is `None`. The scale keeps the mode for later
+  weigh-ins without a connection.
+- `display_unit` sets the scale's display unit (kg, lb or st). Without it, the
+  scale keeps its unit. `measurement.display_unit` is the unit it was showing.
+- `weight_timeout` and `impedance_timeout` change the waits.
 
-### Using the measurement session directly
+## Seeing each frame
 
-If you already have a connected `BleakClient`, run the session yourself with
-`async_measure()`:
+Register a callback for `WeightFrame` (about every 0.36 s), `ImpedanceFrame`,
+or `Frame` for both. It returns a function that unregisters it:
 
 ```python
-from bleak import BleakClient
-from vitafit_ble import async_measure
+from vitafit_ble import Frame, VitafitSession, WeightFrame
 
-async with BleakClient(address) as client:
-    measurement = await async_measure(client)
+def on_weight(frame):
+    print(frame.weight_kg, "stable" if frame.stable else "settling")
+
+session = VitafitSession()
+unregister = session.register_callback(WeightFrame, on_weight)
+session.register_callback(Frame, print)
+measurement = await session.async_measure(client)
 ```
 
-It returns a `Measurement` with `weight_kg`, `impedance_ohm` and
-`display_unit` (the unit the scale was showing: `DisplayUnit.KG`, `LB` or
-`ST`), or `None` if no stable weight arrives within 30 s.
-
-To also set the scale's display unit, pass `display_unit`:
+Callbacks for a frame's own class run before those for `Frame`. For the raw
+bytes of every command and notification, override `on_send` and `on_receive`:
 
 ```python
-from vitafit_ble import DisplayUnit, async_measure
+class PrintingSession(VitafitSession):
+    def on_send(self, data):
+        print("TX", data.hex(" "))
 
-measurement = await async_measure(client, display_unit=DisplayUnit.ST)
+    def on_receive(self, data):
+        print("RX", data.hex(" "))
 ```
 
-The display changes straight away. `measurement.display_unit` always comes
-from the scale's stable weight frame. Without `display_unit`, the scale keeps
-its current unit.
-
-To weigh without passing any current through the body, as the Vitafit app's
-"Weight Only Mode" does, pass `weight_only=True`:
-
-```python
-measurement = await async_measure(client, weight_only=True)
-```
-
-`measurement.impedance_ohm` is then always `None`. The default is normal mode.
-The scale keeps the mode for later weigh-ins without a connection.
+These only observe the exchange. The receive hooks and callbacks run as each
+notification arrives, including after `async_measure()` returns, until you
+disconnect. `scripts/capture.py` logs a weigh-in this way.
 
 ## Building a `BluetoothServiceInfoBleak` outside Home Assistant
 
-When you are not running inside Home Assistant you can construct the
-`service_info` yourself from a Bleak scan result:
+From a `bleak.BleakScanner` result (`device` and `advertisement_data`):
 
 ```python
+from bluetooth_data_tools import monotonic_time_coarse
 from habluetooth import BluetoothServiceInfoBleak
 
 service_info = BluetoothServiceInfoBleak(
@@ -137,11 +119,8 @@ service_info = BluetoothServiceInfoBleak(
     device=device,
     advertisement=advertisement_data,
     connectable=True,
-    time=0,
+    time=monotonic_time_coarse(),  # poll_needed() checks it's recent
     tx_power=advertisement_data.tx_power or 0,
     raw=None,
 )
 ```
-
-`device` and `advertisement_data` are the `BLEDevice` and `AdvertisementData`
-objects yielded by `bleak.BleakScanner`.
