@@ -6,7 +6,7 @@ It is used by the Home Assistant integration in the sibling repo `../ha-vitafit-
 
 ## Status (11 Oct 2026)
 
-- v0.3.0 (`VitafitSession` with frame callbacks, plain functions instead of `VitafitBluetoothDeviceData`) released on PyPI on 11 Oct 2026 via `release.yml`, with docs at `vitafit-ble.readthedocs.io`. Renovate is enabled.
+- v0.4.0 (`async_poll` raises `BleakError` for a Bluetooth error during the weigh-in) released on PyPI on 12 Oct 2026 via `release.yml`, with docs at `vitafit-ble.readthedocs.io`. Renovate is enabled.
 - Tested on the owner's real VT701 with `scripts/capture.py`. The frames in `tests/frames.py` are real captures.
 - The Vitafit app's traffic was captured with Android HCI snoop logs, stored in a gitignored folder (`btsnoop_logs/`) because they include other devices' traffic.
 
