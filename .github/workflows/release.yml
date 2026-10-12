@@ -9,9 +9,15 @@ jobs:
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
+      contents: write # attach the built files to the GitHub release
       id-token: write # PyPI trusted publishing
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v7
       - run: uv build
       - run: uv publish
+      - name: Attach the wheel to the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: gh release upload "$TAG" dist/*.whl --clobber

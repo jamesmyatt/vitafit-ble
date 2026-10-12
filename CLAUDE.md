@@ -57,7 +57,7 @@ In CI, the pre-commit hooks run on [pre-commit.ci](https://pre-commit.ci) (confi
 
 ## Release
 
-Releases are published by `.github/workflows/release.yml` when a GitHub release is published. It uses PyPI trusted publishing, so no token is needed.
+Releases are published by `.github/workflows/release.yml` when a GitHub release is published. It uses PyPI trusted publishing, so no token is needed, then attaches the wheel to the GitHub release with the workflow's own token.
 
 To release:
 
