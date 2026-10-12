@@ -76,8 +76,10 @@ or `Frame` for both. It returns a function that unregisters it:
 ```python
 from vitafit_ble import Frame, VitafitSession, WeightFrame
 
+
 def on_weight(frame):
     print(frame.weight_kg, "stable" if frame.stable else "settling")
+
 
 session = VitafitSession()
 unregister = session.register_callback(WeightFrame, on_weight)
