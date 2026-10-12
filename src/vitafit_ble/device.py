@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from bleak.exc import BleakError
 from bleak_retry_connector import BleakClientWithServiceCache, establish_connection
 from bluetooth_data_tools import monotonic_time_coarse, short_address
 
@@ -64,9 +63,9 @@ async def async_poll(
     ``session`` sets the options and callbacks, as for ``async_measure``, for
     example ``await async_poll(ble_device, VitafitSession(weight_only=True))``.
 
-    Return None if no stable weight arrives, or a Bluetooth error occurs after
-    connecting; the error is logged as a warning. A failure to connect raises
-    ``BleakError``.
+    Return None if no stable weight arrives. A Bluetooth error, connecting or
+    during the weigh-in, raises ``BleakError``, after disconnecting. It isn't
+    logged, so the caller can log a run of failures once.
     """
     _LOGGER.debug("Polling Vitafit scale: %s", ble_device.address)
     client = await establish_connection(
@@ -74,9 +73,6 @@ async def async_poll(
     )
     try:
         return await async_measure(client, session)
-    except BleakError as err:
-        _LOGGER.warning("%s: weigh-in failed: %s", ble_device.address, err)
-        return None
     finally:
         await client.disconnect()
         _LOGGER.debug("%s: disconnected", ble_device.address)

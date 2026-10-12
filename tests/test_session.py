@@ -373,11 +373,16 @@ async def test_async_poll_session() -> None:
 
 
 async def test_async_poll_bleak_error(caplog: pytest.LogCaptureFixture) -> None:
+    """A Bluetooth error during the weigh-in is raised, after disconnecting."""
     client = FakeClient()
     client.start_notify = AsyncMock(side_effect=BleakError("disconnected"))  # type: ignore[method-assign]
-    with patch(
-        "vitafit_ble.device.establish_connection", AsyncMock(return_value=client)
+    with (
+        patch(
+            "vitafit_ble.device.establish_connection", AsyncMock(return_value=client)
+        ),
+        pytest.raises(BleakError, match="disconnected"),
     ):
-        assert await async_poll(BLE_DEVICE) is None
+        await async_poll(BLE_DEVICE)
     client.disconnect.assert_awaited_once()
-    assert "weigh-in failed: disconnected" in caplog.text
+    # Not logged, so the caller can log a run of failures once.
+    assert not [record for record in caplog.records if record.levelno > logging.DEBUG]

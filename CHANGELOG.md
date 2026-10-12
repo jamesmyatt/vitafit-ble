@@ -8,6 +8,15 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-12
+
+### Changed
+
+- `async_poll()` raises `BleakError` if a Bluetooth error occurs during the
+  weigh-in, as it already did if it couldn't connect. It used to return `None`
+  and log a warning. It now returns `None` only if no stable weight arrives,
+  and logs at debug level only, so the caller can log a run of failures once.
+
 ## [0.3.0] - 2026-10-11
 
 ### Added
@@ -81,7 +90,8 @@ openScale's VT701 handler.
   `weight_only`, are passed to `async_measure()`.
 - Type hints (`py.typed`). Requires Python 3.11 or later.
 
-[Unreleased]: https://github.com/jamesmyatt/vitafit-ble/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/jamesmyatt/vitafit-ble/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/jamesmyatt/vitafit-ble/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/jamesmyatt/vitafit-ble/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/jamesmyatt/vitafit-ble/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/jamesmyatt/vitafit-ble/releases/tag/v0.1.0

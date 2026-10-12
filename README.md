@@ -1,6 +1,12 @@
 # vitafit-ble
 
-Bluetooth library for Vitafit devices. See [supported devices](docs/supported_devices.md) for the models it works with.
+Bluetooth library for Vitafit smart scales.
+
+Supported models:
+
+- Vitafit VT701 body fat scale
+
+See [supported devices](docs/supported_devices.md) for more details.
 
 Unofficial; not affiliated with Vitafit.
 
@@ -32,7 +38,13 @@ measurement = await VitafitSession(weight_only=True).async_measure(client)
 
 For Home Assistant, `poll_needed()` says when to connect, and `async_poll()` connects, runs a weigh-in and disconnects. See [usage](docs/usage.md) for details.
 
+## Acknowledgements
+
+This library has been created with the assistance of Claude Code and Opus 5.5.
+
+The protocol is based on openScale's
+[VT701 handler](https://github.com/oliexdev/openScale/pull/1423).
+
 ## Licence
 
-MIT. The protocol is based on openScale's
-[VT701 handler](https://github.com/oliexdev/openScale/pull/1423).
+MIT

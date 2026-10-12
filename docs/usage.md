@@ -41,9 +41,10 @@ old, so it's safe to call from a timer: it's false once the scale sleeps.
 The weigh-in waits up to 30 s for a stable weight, acknowledges it, then waits
 up to 10 s for impedance. The weight is always in kg, whatever the scale
 displays. `impedance_ohm` is `None` if the scale can't measure it, for example
-through socks, or you step off early. If no stable weight arrives, or the
-connection drops, `async_poll()` returns `None` and logs it. If it can't
-connect, it raises `BleakError`.
+through socks, or you step off early. If no stable weight arrives,
+`async_poll()` returns `None`. A Bluetooth error, connecting or during the
+weigh-in, raises `BleakError` after disconnecting. `async_poll()` doesn't log
+it, so you can log a run of failures once.
 
 If you already have a connected `BleakClient`, use `async_measure(client)`
 instead. See [Protocol](protocol.md) for the frames.
