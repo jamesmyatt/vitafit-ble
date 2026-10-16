@@ -151,6 +151,18 @@ ACK_STABLE_WEIGHT = encode_command(FrameType.WEIGHT, bytes((STABLE_FLAG,)))
 ACK_IMPEDANCE = encode_command(FrameType.IMPEDANCE, b"\x00")
 
 
+def ack_command(frame: bytes) -> bytes:
+    """Build the acknowledgement of a weight or impedance frame that decodes.
+
+    A weight acknowledgement echoes the frame's flag, as the Vitafit app does,
+    so it's ACK_STABLE_WEIGHT for a stable weight. An impedance acknowledgement
+    is always ACK_IMPEDANCE.
+    """
+    if frame[3] == FrameType.WEIGHT:
+        return encode_command(FrameType.WEIGHT, frame[4:5])
+    return ACK_IMPEDANCE
+
+
 def _is_valid(frame: bytes) -> bool:
     return (
         len(frame) >= MIN_FRAME_LENGTH

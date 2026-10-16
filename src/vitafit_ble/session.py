@@ -14,11 +14,10 @@ from .const import (
     WRITE_CHARACTERISTIC_UUID,
 )
 from .protocol import (
-    ACK_IMPEDANCE,
-    ACK_STABLE_WEIGHT,
     Frame,
     ImpedanceFrame,
     WeightFrame,
+    ack_command,
     decode,
     start_commands,
 )
@@ -64,9 +63,10 @@ class VitafitSession:
     callbacks for decoded frames with ``register_callback``, for example to show
     the live weight, and subclass to override ``on_send`` and ``on_receive`` for
     the raw bytes, for example to log the exchange. They only observe; they
-    don't change the exchange. The receive callbacks run as each notification
+    don't change the exchange. ``on_receive`` runs as each notification
     arrives, including any after ``async_measure`` returns, until the client
-    disconnects.
+    disconnects. The frame callbacks run in ``async_measure``, after the
+    frame is acknowledged, so they stop when it returns.
 
     Create one per weigh-in. It can be reused for later weigh-ins, but not
     while one is running.
@@ -79,6 +79,7 @@ class VitafitSession:
         impedance_timeout: float = IMPEDANCE_TIMEOUT,
         display_unit: DisplayUnit | None = None,
         weight_only: bool = False,
+        ack_every_frame: bool = True,
     ) -> None:
         """Set the weigh-in options.
 
@@ -92,13 +93,19 @@ class VitafitSession:
         With ``weight_only``, select the scale's weight-only mode, which passes
         no current, so impedance is None. Without it, select the normal mode.
         The scale keeps the mode for later weigh-ins without a connection.
+
+        With ``ack_every_frame``, the default, acknowledge every weight and
+        impedance frame, as the Vitafit app does, so that the scale replaces
+        any frame that went missing or failed its checks. Without it, only
+        acknowledge the stable weight and the impedance, as openScale does.
         """
         self._weight_timeout = weight_timeout
         self._impedance_timeout = impedance_timeout
         self._display_unit = display_unit
         self._weight_only = weight_only
+        self._ack_every_frame = ack_every_frame
         self._callbacks: dict[type[Frame], list[Callable[[Frame], None]]] = {}
-        self._frames: asyncio.Queue[Frame] = asyncio.Queue()
+        self._frames: asyncio.Queue[tuple[Frame, bytes]] = asyncio.Queue()
 
     def register_callback(
         self, frame_type: type[_FrameT], callback: Callable[[_FrameT], None]
@@ -106,7 +113,9 @@ class VitafitSession:
         """Call ``callback`` with each decoded frame of ``frame_type``.
 
         ``frame_type`` is ``WeightFrame`` (streamed about every 0.36 s),
-        ``ImpedanceFrame`` (before it's acknowledged), or ``Frame`` for both.
+        ``ImpedanceFrame``, or ``Frame`` for both. Callbacks run during
+        ``async_measure``, after the frame is acknowledged (with
+        ``ack_every_frame``, or if it's the stable weight or the impedance).
         Callbacks for a frame's own class run before those for ``Frame``, each
         in the order registered. Return a function that unregisters it.
         """
@@ -135,6 +144,44 @@ class VitafitSession:
         the scale can't measure it, for example through socks, or doesn't
         report it in time, for example when the user steps off early.
         """
+        await self._async_start(client)
+        loop = asyncio.get_running_loop()
+        # Only taking a frame is timed, so a timeout can't interrupt a write.
+        deadline = loop.time() + self._weight_timeout
+        weight: WeightFrame | None = None
+        while True:
+            try:
+                async with asyncio.timeout_at(deadline):
+                    frame, data = await self._frames.get()
+            except TimeoutError:
+                if weight is None:
+                    _LOGGER.debug("No stable weight within %s s", self._weight_timeout)
+                    return None
+                _LOGGER.debug(
+                    "No impedance within %s s; returning weight only",
+                    self._impedance_timeout,
+                )
+                return _measurement(weight, None)
+
+            if weight is None:
+                # openScale says acknowledging the stable weight starts the
+                # impedance measurement. Untested: no normal-mode weigh-in has
+                # skipped it.
+                wanted = isinstance(frame, WeightFrame) and frame.stable
+            else:
+                wanted = isinstance(frame, ImpedanceFrame)
+            if wanted or self._ack_every_frame:
+                await self._async_write(client, ack_command(data))
+            self._dispatch(frame)
+
+            if weight is None:
+                if wanted and isinstance(frame, WeightFrame):
+                    weight = frame
+                    deadline = loop.time() + self._impedance_timeout
+            elif isinstance(frame, ImpedanceFrame):
+                return _measurement(weight, frame)
+
+    async def _async_start(self, client: BleakClient) -> None:
         self._frames = asyncio.Queue()
         await client.start_notify(NOTIFY_CHARACTERISTIC_UUID, self._on_notify)
         for command in start_commands(
@@ -142,64 +189,31 @@ class VitafitSession:
         ):
             await self._async_write(client, command)
 
-        try:
-            async with asyncio.timeout(self._weight_timeout):
-                weight = await self._async_stable_weight()
-        except TimeoutError:
-            _LOGGER.debug("No stable weight within %s s", self._weight_timeout)
-            return None
-        else:
-            # openScale says acknowledging the stable weight starts the impedance
-            # measurement. Untested: no normal-mode weigh-in has skipped it.
-            await self._async_write(client, ACK_STABLE_WEIGHT)
-
-        try:
-            async with asyncio.timeout(self._impedance_timeout):
-                impedance = await self._async_impedance()
-        except TimeoutError:
-            _LOGGER.debug(
-                "No impedance within %s s; returning weight only",
-                self._impedance_timeout,
-            )
-            impedance_ohm = None
-        else:
-            await self._async_write(client, ACK_IMPEDANCE)
-            impedance_ohm = impedance.impedance_ohm
-
-        return Measurement(
-            weight_kg=weight.weight_kg,
-            impedance_ohm=impedance_ohm,
-            display_unit=weight.display_unit,
-        )
+    def _dispatch(self, frame: Frame) -> None:
+        for frame_type in type(frame).__mro__:
+            for callback in list(self._callbacks.get(frame_type, ())):
+                callback(frame)
 
     def _on_notify(self, _: BleakGATTCharacteristic, data: bytearray) -> None:
         received = bytes(data)
         frame = decode(received)
         _LOGGER.debug("Received %s: %s", received.hex(" "), frame)
         self.on_receive(received)
-        if frame is None:
-            return
-        for frame_type in type(frame).__mro__:
-            for callback in list(self._callbacks.get(frame_type, ())):
-                callback(frame)
-        self._frames.put_nowait(frame)
+        if frame is not None:
+            self._frames.put_nowait((frame, received))
 
     async def _async_write(self, client: BleakClient, command: bytes) -> None:
         _LOGGER.debug("Sending %s", command.hex(" "))
         self.on_send(command)
         await client.write_gatt_char(WRITE_CHARACTERISTIC_UUID, command, response=True)
 
-    async def _async_stable_weight(self) -> WeightFrame:
-        while True:
-            frame = await self._frames.get()
-            if isinstance(frame, WeightFrame) and frame.stable:
-                return frame
 
-    async def _async_impedance(self) -> ImpedanceFrame:
-        while True:
-            frame = await self._frames.get()
-            if isinstance(frame, ImpedanceFrame):
-                return frame
+def _measurement(weight: WeightFrame, impedance: ImpedanceFrame | None) -> Measurement:
+    return Measurement(
+        weight_kg=weight.weight_kg,
+        impedance_ohm=impedance.impedance_ohm if impedance else None,
+        display_unit=weight.display_unit,
+    )
 
 
 async def async_measure(

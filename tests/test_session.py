@@ -29,6 +29,7 @@ from vitafit_ble.protocol import (
     ACK_STABLE_WEIGHT,
     ImpedanceFrame,
     WeightFrame,
+    ack_command,
     decode,
     start_commands,
     unit_command,
@@ -55,9 +56,17 @@ if TYPE_CHECKING:
 
 
 START_COMMANDS = tuple(start_commands())
+ACK_SETTLING = ack_command(SETTLING)
 # Everything the session sends, in order: no unit command, so the scale keeps its
-# display unit.
-FULL_EXCHANGE = [*START_COMMANDS, ACK_STABLE_WEIGHT, ACK_IMPEDANCE]
+# display unit, and an acknowledgement for every frame, including the stable
+# weight the scale repeats while it measures impedance.
+FULL_EXCHANGE = [
+    *START_COMMANDS,
+    ACK_SETTLING,
+    ACK_STABLE_WEIGHT,
+    ACK_STABLE_WEIGHT,
+    ACK_IMPEDANCE,
+]
 WEIGHT_ONLY_START_COMMANDS = tuple(start_commands(weight_only=True))
 
 
@@ -78,6 +87,7 @@ class FakeClient:
         self.send_stable = send_stable
         self.impedance = impedance
         self._callback: Callable[[Any, bytearray], None] | None = None
+        self._measuring_impedance = False
         self.disconnect = AsyncMock()
 
     async def start_notify(
@@ -104,8 +114,9 @@ class FakeClient:
                     self._notify(self.stable)
         elif data in {unit_command(unit) for unit in DisplayUnit}:
             self._notify(UNIT_ACK)
-        elif data == ACK_STABLE_WEIGHT:
+        elif data == ACK_STABLE_WEIGHT and not self._measuring_impedance:
             # The scale keeps sending the stable weight until impedance is ready.
+            self._measuring_impedance = True
             self._notify(self.stable)
             if self.impedance is not None:
                 self._notify(self.impedance)
@@ -148,6 +159,8 @@ async def test_set_display_unit(unit: DisplayUnit) -> None:
     assert client.written == [
         *START_COMMANDS,
         unit_command(unit),
+        ack_command(SETTLING_ST),
+        ACK_STABLE_WEIGHT,
         ACK_STABLE_WEIGHT,
         ACK_IMPEDANCE,
     ]
@@ -158,7 +171,34 @@ async def test_first_frame_stable() -> None:
     client = FakeClient(first=STABLE, send_stable=False)
     result = await async_measure(client)  # type: ignore[arg-type]
     assert result == Measurement(87.35, impedance_ohm=466, display_unit=KG)
-    assert client.written == FULL_EXCHANGE
+    assert client.written == [
+        *START_COMMANDS,
+        ACK_STABLE_WEIGHT,
+        ACK_STABLE_WEIGHT,
+        ACK_IMPEDANCE,
+    ]
+
+
+async def test_ack_only_stable_weight_and_impedance() -> None:
+    """Without ack_every_frame, only the frames waited for are acknowledged."""
+    client = FakeClient()
+    result = await async_measure(client, VitafitSession(ack_every_frame=False))  # type: ignore[arg-type]
+    assert result == Measurement(87.35, impedance_ohm=466, display_unit=KG)
+    assert client.written == [*START_COMMANDS, ACK_STABLE_WEIGHT, ACK_IMPEDANCE]
+
+
+async def test_corrupt_frame_not_acknowledged() -> None:
+    """A frame that fails its checks isn't acknowledged, so the scale resends it."""
+    corrupt = SETTLING[:-2] + bytes((SETTLING[-2] ^ 0xFF,)) + SETTLING[-1:]
+    client = FakeClient(first=corrupt)
+    result = await async_measure(client)  # type: ignore[arg-type]
+    assert result == Measurement(87.35, impedance_ohm=466, display_unit=KG)
+    assert client.written == [
+        *START_COMMANDS,
+        ACK_STABLE_WEIGHT,
+        ACK_STABLE_WEIGHT,
+        ACK_IMPEDANCE,
+    ]
 
 
 async def test_impedance_failed() -> None:
@@ -176,6 +216,8 @@ async def test_weight_only() -> None:
     assert result == Measurement(87.35, impedance_ohm=None, display_unit=KG)
     assert client.written == [
         *WEIGHT_ONLY_START_COMMANDS,
+        ACK_SETTLING,
+        ACK_STABLE_WEIGHT,
         ACK_STABLE_WEIGHT,
         ACK_IMPEDANCE,
     ]
@@ -219,15 +261,13 @@ class HookSession(VitafitSession):
         self.events.append((kind, frame))
 
 
-def _received(data: bytes) -> list[tuple[str, object]]:
-    """Return the hook and callback calls for one notification."""
+def _handled(data: bytes) -> list[tuple[str, object]]:
+    """Return the acknowledgement and callback calls for one decoded frame."""
     frame = decode(data)
-    events: list[tuple[str, object]] = [("receive", data)]
-    if frame is not None:
-        # The frame's own class first, then Frame.
-        kind = "weight" if isinstance(frame, WeightFrame) else "impedance"
-        events += [(kind, frame), ("frame", frame)]
-    return events
+    assert frame is not None
+    # The frame's own class first, then Frame.
+    kind = "weight" if isinstance(frame, WeightFrame) else "impedance"
+    return [("send", ack_command(data)), (kind, frame), ("frame", frame)]
 
 
 async def test_async_measure_session() -> None:
@@ -241,7 +281,10 @@ async def test_async_measure_session() -> None:
 
 
 async def test_session_hooks() -> None:
-    """The hooks and callbacks see every frame in order, including late ones."""
+    """The raw hooks see every frame as it arrives, including late ones.
+
+    The callbacks see each frame after it's acknowledged, during the weigh-in.
+    """
     client = FakeClient()
     session = HookSession()
     result = await session.async_measure(client)  # type: ignore[arg-type]
@@ -249,21 +292,25 @@ async def test_session_hooks() -> None:
     mode, hello = START_COMMANDS
     assert session.events == [
         ("send", mode),
-        *_received(START_REPLIES[0]),
+        ("receive", START_REPLIES[0]),
         ("send", hello),
-        *_received(START_REPLIES[1]),
-        *_received(SETTLING),
-        *_received(STABLE),
+        ("receive", START_REPLIES[1]),
+        ("receive", SETTLING),
+        ("receive", STABLE),
+        *_handled(SETTLING),
+        # The scale replies to the stable weight's acknowledgement at once.
         ("send", ACK_STABLE_WEIGHT),
-        *_received(STABLE),
-        *_received(IMPEDANCE),
-        ("send", ACK_IMPEDANCE),
+        ("receive", STABLE),
+        ("receive", IMPEDANCE),
+        *_handled(STABLE)[1:],
+        *_handled(STABLE),
+        *_handled(IMPEDANCE),
     ]
 
-    # Notifications after the weigh-in still reach them.
+    # Notifications after the weigh-in still reach the raw hook only.
     session.events.clear()
     client._notify(STABLE)
-    assert session.events == _received(STABLE)
+    assert session.events == [("receive", STABLE)]
 
 
 async def test_multiple_callbacks() -> None:

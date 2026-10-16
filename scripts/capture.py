@@ -93,7 +93,7 @@ class RecordingSession(VitafitSession):
         self._raw("rx", NOTIFY_CHARACTERISTIC_UUID, data)
 
     def _on_frame(self, frame: Frame) -> None:
-        """Log a decoded frame, after its notification."""
+        """Log a decoded frame, after its acknowledgement."""
         _LOGGER.info("    %s", frame)
         self._recorder.record(
             "frame", type=type(frame).__name__, **dataclasses.asdict(frame)
@@ -195,6 +195,8 @@ class WeighInOptions:
     """Display unit to set; None leaves the scale's unit alone."""
     weight_only: bool
     """Select the scale's weight-only mode instead of measuring impedance."""
+    ack_every_frame: bool
+    """Acknowledge every weight and impedance frame, not just the stable weight."""
 
 
 async def _async_weigh_in(
@@ -236,6 +238,7 @@ async def _async_weigh_in(
             impedance_timeout=options.impedance_timeout,
             display_unit=options.unit,
             weight_only=options.weight_only,
+            ack_every_frame=options.ack_every_frame,
         )
         measurement = await session.async_measure(client)
         _LOGGER.info("Result: %s", measurement)
@@ -320,6 +323,14 @@ def _parse_args() -> argparse.Namespace:
         "scale keeps the mode for offline weigh-ins until the next connection",
     )
     parser.add_argument(
+        "--ack-every-frame",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="acknowledge every weight and impedance frame, as the Vitafit app "
+        "does; with --no-ack-every-frame, only the stable weight and the "
+        "impedance, as openScale does (default: %(default)s)",
+    )
+    parser.add_argument(
         "-v",
         "--verbose",
         action="store_true",
@@ -358,6 +369,7 @@ async def _async_main(args: argparse.Namespace) -> int:
                     linger=args.linger,
                     unit=UNITS[args.unit] if args.unit else None,
                     weight_only=args.weight_only,
+                    ack_every_frame=args.ack_every_frame,
                 ),
             )
             if args.rescan:
