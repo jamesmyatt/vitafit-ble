@@ -265,7 +265,7 @@ def _handled(data: bytes) -> list[tuple[str, object]]:
     """Return the acknowledgement and callback calls for one decoded frame."""
     frame = decode(data)
     assert frame is not None
-    # The frame's own class first, then Frame.
+    # In the order HookSession registers them.
     kind = "weight" if isinstance(frame, WeightFrame) else "impedance"
     return [("send", ack_command(data)), (kind, frame), ("frame", frame)]
 
@@ -314,19 +314,22 @@ async def test_session_hooks() -> None:
 
 
 async def test_multiple_callbacks() -> None:
-    """Several callbacks for one frame type run in the order registered."""
-    calls: list[tuple[str, WeightFrame]] = []
+    """A frame's callbacks run in the order registered, whatever their type."""
+    calls: list[tuple[str, Frame]] = []
     session = VitafitSession()
-    session.register_callback(WeightFrame, partial(_append, calls, "first"))
+    session.register_callback(Frame, partial(_append, calls, "first"))
     session.register_callback(WeightFrame, partial(_append, calls, "second"))
+    session.register_callback(Frame, partial(_append, calls, "third"))
     await async_measure(FakeClient(), session)  # type: ignore[arg-type]
     settling = decode(SETTLING)
-    assert calls[:2] == [("first", settling), ("second", settling)]
+    assert calls[:3] == [
+        ("first", settling),
+        ("second", settling),
+        ("third", settling),
+    ]
 
 
-def _append(
-    calls: list[tuple[str, WeightFrame]], name: str, frame: WeightFrame
-) -> None:
+def _append(calls: list[tuple[str, Frame]], name: str, frame: Frame) -> None:
     calls.append((name, frame))
 
 

@@ -91,7 +91,7 @@ session.register_callback(Frame, print)
 measurement = await session.async_measure(client)
 ```
 
-Callbacks for a frame's own class run before those for `Frame`. For the raw
+A frame's callbacks run in the order registered, whatever their type. For the raw
 bytes of every command and notification, override `on_send` and `on_receive`:
 
 ```python

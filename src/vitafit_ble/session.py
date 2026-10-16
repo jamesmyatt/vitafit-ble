@@ -104,7 +104,7 @@ class VitafitSession:
         self._display_unit = display_unit
         self._weight_only = weight_only
         self._ack_every_frame = ack_every_frame
-        self._callbacks: dict[type[Frame], list[Callable[[Frame], None]]] = {}
+        self._callbacks: list[tuple[type[Frame], Callable[[Frame], None]]] = []
         self._frames: asyncio.Queue[tuple[Frame, bytes]] = asyncio.Queue()
 
     def register_callback(
@@ -116,15 +116,14 @@ class VitafitSession:
         ``ImpedanceFrame``, or ``Frame`` for both. Callbacks run during
         ``async_measure``, after the frame is acknowledged (with
         ``ack_every_frame``, or if it's the stable weight or the impedance).
-        Callbacks for a frame's own class run before those for ``Frame``, each
-        in the order registered. Return a function that unregisters it.
+        A frame's callbacks run in the order registered, whatever their
+        ``frame_type``. Return a function that unregisters it.
         """
-        callbacks = self._callbacks.setdefault(frame_type, [])
-        frame_callback = cast("Callable[[Frame], None]", callback)
-        callbacks.append(frame_callback)
+        registration = (frame_type, cast("Callable[[Frame], None]", callback))
+        self._callbacks.append(registration)
 
         def _unregister() -> None:
-            callbacks.remove(frame_callback)
+            self._callbacks.remove(registration)
 
         return _unregister
 
@@ -190,8 +189,8 @@ class VitafitSession:
             await self._async_write(client, command)
 
     def _dispatch(self, frame: Frame) -> None:
-        for frame_type in type(frame).__mro__:
-            for callback in list(self._callbacks.get(frame_type, ())):
+        for frame_type, callback in list(self._callbacks):
+            if isinstance(frame, frame_type):
                 callback(frame)
 
     def _on_notify(self, _: BleakGATTCharacteristic, data: bytearray) -> None:

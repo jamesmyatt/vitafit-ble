@@ -26,6 +26,8 @@ and this project adheres to
 - **Frame callbacks run during `async_measure()`, after the frame is
   acknowledged, instead of as each notification arrives, so they stop when it
   returns. `on_receive()` still sees every notification until disconnecting.**
+- **A frame's callbacks run in the order registered. `Frame` callbacks used to
+  run after those for the frame's own class.**
 
 ## [0.4.0] - 2026-10-12
 
