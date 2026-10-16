@@ -51,6 +51,12 @@ Starting the impedance measurement:
   stable-weight acknowledgement. openScale says it is the acknowledgement; a
   normal-mode weigh-in without it hasn't been tried.
 
+Several clients, from captures of a real scale:
+
+- After a weigh-in with one client, a client that connects before the scale
+  sleeps gets the replies to the mode and hello commands, but no weight or
+  impedance frames.
+
 Acknowledgements:
 
 - openScale acknowledges only one weight frame, the stable weight, and the
@@ -108,6 +114,7 @@ Timing, from captures of a real scale:
 - After the stable-weight acknowledgement, the scale keeps repeating the
   stable weight until impedance is ready, about 5 s later.
 - The scale repeats the impedance frame until it is acknowledged.
+- Acknowledging every weight frame doesn't change the timing.
 
 This protocol combines openScale's
 [VT701 handler](https://github.com/oliexdev/openScale/pull/1423) with captures
