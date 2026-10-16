@@ -12,6 +12,9 @@ and this project adheres to
 
 - `VitafitSession(ack_every_frame=False)` acknowledges only the stable weight
   and the impedance, as openScale does.
+- `ImpedanceFrame.code`: the raw value when there's no impedance reading, an
+  `ImpedanceCode` (`FAILED` or `WEIGHT_ONLY`) if it's a known one.
+  `ImpedanceCode` is exported from `vitafit_ble`.
 - Python 3.15 support, tested in CI.
 - A Python version policy in the installation docs: supported and tested from
   the version the latest stable Home Assistant Core release requires (3.14),
