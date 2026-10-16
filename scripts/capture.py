@@ -256,6 +256,11 @@ async def _async_weigh_in(
         _LOGGER.error("Bluetooth error: %s", err)  # noqa: TRY400
         recorder.record("error", error=str(err))
         return False
+    except asyncio.CancelledError:
+        # Ctrl+C cancels the main task; record it before disconnecting.
+        _LOGGER.info("Interrupted; disconnecting")
+        recorder.record("interrupted")
+        raise
     finally:
         expected = True
         await client.disconnect()
@@ -399,7 +404,10 @@ def main() -> int:
     if args.verbose:
         logging.getLogger("bleak").setLevel(logging.DEBUG)
         logging.getLogger("vitafit_ble").setLevel(logging.DEBUG)
-    return asyncio.run(_async_main(args))
+    try:
+        return asyncio.run(_async_main(args))
+    except KeyboardInterrupt:
+        return 130
 
 
 if __name__ == "__main__":

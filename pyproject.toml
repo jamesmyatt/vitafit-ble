@@ -65,3 +65,4 @@ combine-as-imports = true
 
 [tool.mypy]
 strict = true
+mypy_path = "src"
