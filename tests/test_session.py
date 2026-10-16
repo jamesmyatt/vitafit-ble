@@ -147,6 +147,23 @@ async def test_full_measurement(
     assert client.written == FULL_EXCHANGE
 
 
+async def test_status_logged(caplog: pytest.LogCaptureFixture) -> None:
+    """Each stage of the weigh-in is logged at debug level."""
+    with caplog.at_level(logging.DEBUG, logger="vitafit_ble.session"):
+        await async_measure(FakeClient())  # type: ignore[arg-type]
+    messages = [
+        record.getMessage()
+        for record in caplog.records
+        if not record.getMessage().startswith(("Sending", "Received"))
+    ]
+    assert messages == [
+        "Waiting up to 30.0 s for a stable weight",
+        "Stable weight 87.35 kg; waiting up to 10.0 s for impedance",
+        f"Weigh-in complete: {Measurement(87.35, 466, KG)}",
+    ]
+    assert {record.levelno for record in caplog.records} == {logging.DEBUG}
+
+
 @pytest.mark.parametrize("unit", list(DisplayUnit))
 async def test_set_display_unit(unit: DisplayUnit) -> None:
     """The unit command goes after the mode and hello commands.

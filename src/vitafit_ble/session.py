@@ -147,6 +147,7 @@ class VitafitSession:
         loop = asyncio.get_running_loop()
         # Only taking a frame is timed, so a timeout can't interrupt a write.
         deadline = loop.time() + self._weight_timeout
+        _LOGGER.debug("Waiting up to %s s for a stable weight", self._weight_timeout)
         weight: WeightFrame | None = None
         while True:
             try:
@@ -177,8 +178,15 @@ class VitafitSession:
                 if wanted and isinstance(frame, WeightFrame):
                     weight = frame
                     deadline = loop.time() + self._impedance_timeout
+                    _LOGGER.debug(
+                        "Stable weight %s kg; waiting up to %s s for impedance",
+                        weight.weight_kg,
+                        self._impedance_timeout,
+                    )
             elif isinstance(frame, ImpedanceFrame):
-                return _measurement(weight, frame)
+                measurement = _measurement(weight, frame)
+                _LOGGER.debug("Weigh-in complete: %s", measurement)
+                return measurement
 
     async def _async_start(self, client: BleakClient) -> None:
         self._frames = asyncio.Queue()
