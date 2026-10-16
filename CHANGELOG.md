@@ -8,6 +8,13 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- Python 3.15 support, tested in CI.
+- A Python version policy in the installation docs: supported and tested from
+  the version the latest stable Home Assistant Core release requires (3.14),
+  with older versions back to 3.11 on a best-effort basis.
+
 ## [0.4.0] - 2026-10-12
 
 ### Changed

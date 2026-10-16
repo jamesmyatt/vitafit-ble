@@ -27,7 +27,7 @@ Deliberately different from the [Bluetooth-Devices](https://github.com/Bluetooth
 - `uv_build`, not Poetry.
 - Manual GitHub release triggers `release.yml`, with a hand-written `CHANGELOG.md` (Keep a Changelog), not python-semantic-release.
 - ruff `ALL` and strict mypy.
-- `requires-python >= 3.11` (the real minimum, for `asyncio.timeout`), but CI only tests 3.14, the version HA 2026.9 uses.
+- Python support policy (owner, 16 Oct 2026): supported, and tested in CI, from the Python version that the latest stable Home Assistant Core release requires (3.14 for Core 2026.10) onwards, including each new Python release. Older versions are best effort and not tested: `requires-python >= 3.11` is the code's real minimum (for `asyncio.timeout`), and it can be raised whenever an older version stops you using a Python feature or library you want. Update the `ci.yml` matrix by hand: add each new Python release when it comes out. Keep every version in it until the owner chooses to drop it; when Core raises its Python, suggest dropping the older versions, but don't drop them unasked. Dependabot doesn't update Python versions.
 - No `__version__` constant; use `importlib.metadata.version("vitafit-ble")`.
 - No `@retry_bluetooth_connection_error()`: the weigh-in has state (subscribe, mode and hello commands, wait, ack), so a blind retry could subscribe twice or resend the commands. `establish_connection` already retries the connection.
 - Prettier comes from `rbubley/mirrors-prettier` (stable 3.x), because the org's `pre-commit/mirrors-prettier` is archived and pins a 4.0 alpha. It takes indentation from `.editorconfig`.
@@ -44,7 +44,7 @@ Deliberately different from the [Bluetooth-Devices](https://github.com/Bluetooth
 ## Commands
 
 ```sh
-uv sync                      # Python 3.11+; CI and HA use 3.14
+uv sync                      # Python 3.11+; supported and tested from 3.14
 uv run pre-commit install    # once
 uv run pre-commit run --all-files   # ruff, strict mypy, prettier, codespell, pyupgrade, …
 uv run pytest                # with coverage
