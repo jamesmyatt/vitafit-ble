@@ -158,8 +158,10 @@ async def test_status_logged(caplog: pytest.LogCaptureFixture) -> None:
     ]
     assert messages == [
         "Waiting up to 30.0 s for a stable weight",
-        "Stable weight 87.35 kg; waiting up to 10.0 s for impedance",
-        f"Weigh-in complete: {Measurement(87.35, 466, KG)}",
+        f"Weight: {decode(STABLE)}",
+        "Waiting up to 10.0 s for impedance",
+        f"Impedance: {decode(IMPEDANCE)}",
+        f"Result: {Measurement(87.35, 466, KG)}",
     ]
     assert {record.levelno for record in caplog.records} == {logging.DEBUG}
 
