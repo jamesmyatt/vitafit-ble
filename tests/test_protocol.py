@@ -10,8 +10,10 @@ from vitafit_ble.protocol import (
     ACK_IMPEDANCE,
     ACK_STABLE_WEIGHT,
     DisplayUnit,
+    ImpedanceCode,
     ImpedanceFrame,
     WeightFrame,
+    ack_command,
     decode,
     start_commands,
     unit_command,
@@ -65,19 +67,23 @@ def test_impedance() -> None:
 
 
 @pytest.mark.parametrize(
-    ("frame", "message"),
+    ("frame", "code", "message"),
     [
-        (IMPEDANCE_FAILED, "no contact"),
-        (IMPEDANCE_WEIGHT_ONLY, "weight-only mode"),
+        (IMPEDANCE_FAILED, ImpedanceCode.FAILED, "no contact"),
+        (IMPEDANCE_WEIGHT_ONLY, ImpedanceCode.WEIGHT_ONLY, "weight-only mode"),
         # 1500 ohm: just above openScale's range, not a known code.
-        (h("5a 0b 26 11 00 00 00 00 00 05 dc e5 aa"), "out of range: 1500"),
+        (h("5a 0b 26 11 00 00 00 00 00 05 dc e5 aa"), 1500, "out of range: 1500"),
     ],
 )
 def test_impedance_failed(
-    frame: bytes, message: str, caplog: pytest.LogCaptureFixture
+    frame: bytes, code: int, message: str, caplog: pytest.LogCaptureFixture
 ) -> None:
+    """A skipped impedance keeps the raw value as its code."""
     with caplog.at_level(logging.DEBUG, logger="vitafit_ble.protocol"):
-        assert decode(frame) == ImpedanceFrame(impedance_ohm=None)
+        result = decode(frame)
+    assert result == ImpedanceFrame(impedance_ohm=None, code=code)
+    assert isinstance(result, ImpedanceFrame)
+    assert type(result.code) is type(code)
     assert message in caplog.text
 
 
@@ -135,3 +141,12 @@ def test_commands() -> None:
     assert h("a5 05 26 17 03 37 aa") == unit_command(DisplayUnit.ST)  # captured
     assert h("a5 05 26 10 02 31 aa") == ACK_STABLE_WEIGHT
     assert h("a5 05 26 11 00 32 aa") == ACK_IMPEDANCE
+
+
+def test_ack_command() -> None:
+    """A weight acknowledgement echoes the frame's flag."""
+    assert ack_command(NO_LOAD) == h("a5 05 26 10 00 33 aa")
+    assert ack_command(SETTLING) == h("a5 05 26 10 01 32 aa")  # Vitafit app
+    assert ack_command(STABLE) == ACK_STABLE_WEIGHT
+    assert ack_command(IMPEDANCE) == ACK_IMPEDANCE
+    assert ack_command(IMPEDANCE_FAILED) == ACK_IMPEDANCE

@@ -113,6 +113,11 @@ class ImpedanceFrame(Frame):
 
     impedance_ohm: int | None
     """Impedance in Ω; None if the scale couldn't measure it, e.g. through socks."""
+    code: int | None = None
+    """The raw value when ``impedance_ohm`` is None; None for a reading.
+
+    An ImpedanceCode if it's a known one, otherwise the out-of-range value.
+    """
 
 
 def _checksum(data: Iterable[int]) -> int:
@@ -151,6 +156,18 @@ ACK_STABLE_WEIGHT = encode_command(FrameType.WEIGHT, bytes((STABLE_FLAG,)))
 ACK_IMPEDANCE = encode_command(FrameType.IMPEDANCE, b"\x00")
 
 
+def ack_command(frame: bytes) -> bytes:
+    """Build the acknowledgement of a weight or impedance frame that decodes.
+
+    A weight acknowledgement echoes the frame's flag, as the Vitafit app does,
+    so it's ACK_STABLE_WEIGHT for a stable weight. An impedance acknowledgement
+    is always ACK_IMPEDANCE.
+    """
+    if frame[3] == FrameType.WEIGHT:
+        return encode_command(FrameType.WEIGHT, frame[4:5])
+    return ACK_IMPEDANCE
+
+
 def _is_valid(frame: bytes) -> bool:
     return (
         len(frame) >= MIN_FRAME_LENGTH
@@ -183,17 +200,20 @@ def _decode_impedance(frame: bytes) -> ImpedanceFrame | None:
         _LOGGER.debug("Impedance frame has wrong length: %s", frame.hex(" "))
         return None
     ohm = int.from_bytes(frame[9:11], "big")
+    code: int = ohm
     match ohm:
         case ImpedanceCode.FAILED:
             _LOGGER.debug("Impedance not measured: no contact, e.g. socks")
+            code = ImpedanceCode.FAILED
         case ImpedanceCode.WEIGHT_ONLY:
             _LOGGER.debug("Impedance not measured: weight-only mode")
+            code = ImpedanceCode.WEIGHT_ONLY
         case _ if IMPEDANCE_MIN_OHM <= ohm <= IMPEDANCE_MAX_OHM:
             return ImpedanceFrame(impedance_ohm=ohm)
         case _:
             _LOGGER.debug("Impedance out of range: %s Ω", ohm)
     # Still a valid frame, unlike None, so the session acks it and stops waiting.
-    return ImpedanceFrame(impedance_ohm=None)
+    return ImpedanceFrame(impedance_ohm=None, code=code)
 
 
 # Decoder for each frame type that decode() turns into a Frame. Other valid

@@ -38,9 +38,9 @@ The frames, in the order `vitafit-ble` runs them, after subscribing:
 | `0x17` `UNIT`      | Client → scale | `a5 05 26 17 <code> <chk> aa`                            | Optional: set the display unit, `code` 01 kg, 02 lb, 03 st. Only sent when `VitafitSession` is given `display_unit`.                                                                                                                                     |
 | `0x17` `UNIT`      | Scale → client | `5a 04 26 17 35 aa`                                      | Reply, the same for every unit. Not decoded.                                                                                                                                                                                                             |
 | `0x10` `WEIGHT`    | Scale → client | `5a 0a 26 10 <flag> 00 00 <unit> <w_hi> <w_lo> <chk> aa` | Weight, 0.01 kg, big-endian, whatever the display unit. `flag` is 0x00 with no load, 0x01 while measuring and 0x02 when stable. `unit` is 0x20 + the display unit: 0x21 kg, 0x22 lb, 0x23 st. Streamed throughout, from as soon as notifications are on. |
-| `0x10` `WEIGHT`    | Client → scale | `a5 05 26 10 <flag> <chk> aa`                            | Acknowledge a weight frame, echoing its `flag`. `vitafit-ble` only acknowledges the stable weight (`a5 05 26 10 02 31 aa`); see below.                                                                                                                   |
+| `0x10` `WEIGHT`    | Client → scale | `a5 05 26 10 <flag> <chk> aa`                            | Acknowledge a weight frame, echoing its `flag`: `a5 05 26 10 01 32 aa` while measuring, `a5 05 26 10 02 31 aa` when stable. `vitafit-ble` acknowledges every weight frame by default; see below.                                                         |
 | `0x11` `IMPEDANCE` | Scale → client | `5a 0b 26 11 00 00 00 00 00 <z_hi> <z_lo> <chk> aa`      | Impedance, Ω, big-endian. `0xFFFF` means the scale couldn't measure it, for example through socks; `0x55AA` means weight-only mode.                                                                                                                      |
-| `0x11` `IMPEDANCE` | Client → scale | `a5 05 26 11 00 32 aa`                                   | Acknowledge impedance                                                                                                                                                                                                                                    |
+| `0x11` `IMPEDANCE` | Client → scale | `a5 05 26 11 00 32 aa`                                   | Acknowledge impedance. `vitafit-ble` acknowledges every impedance frame by default.                                                                                                                                                                      |
 
 Starting the impedance measurement:
 
@@ -50,8 +50,25 @@ Starting the impedance measurement:
   itself, subscribing to notifications, the mode or hello command, or the
   stable-weight acknowledgement. openScale says it is the acknowledgement; a
   normal-mode weigh-in without it hasn't been tried.
-- The Vitafit app also acknowledges each settling frame
-  (`a5 05 26 10 01 32 aa`); no effect has been seen.
+
+Several clients, from captures of a real scale:
+
+- After a weigh-in with one client, a client that connects before the scale
+  sleeps gets the replies to the mode and hello commands, but no weight or
+  impedance frames.
+
+Acknowledgements:
+
+- openScale acknowledges only one weight frame, the stable weight, and the
+  impedance.
+- The Vitafit app acknowledges every weight frame, including each settling
+  frame (`a5 05 26 10 01 32 aa`), and the impedance.
+- `vitafit-ble` acknowledges every weight and impedance frame that decodes, as
+  the Vitafit app does, so that the scale replaces any frame that went missing
+  or failed its checks. A frame that fails its checks isn't acknowledged.
+  `VitafitSession(ack_every_frame=False)` acknowledges only the stable weight
+  and the impedance, as openScale does.
+- No effect of acknowledging the settling frames has been seen.
 
 Display unit, from captures of a real scale:
 
@@ -97,6 +114,7 @@ Timing, from captures of a real scale:
 - After the stable-weight acknowledgement, the scale keeps repeating the
   stable weight until impedance is ready, about 5 s later.
 - The scale repeats the impedance frame until it is acknowledged.
+- Acknowledging every weight frame doesn't change the timing.
 
 This protocol combines openScale's
 [VT701 handler](https://github.com/oliexdev/openScale/pull/1423) with captures
@@ -113,8 +131,8 @@ command is optional. The frames on this page and the test vectors in
 scans for the scale, logs each advertisement and whether `vitafit-ble`
 recognises it, then connects, lists the GATT services, and runs a
 `VitafitSession`, logging every frame sent (`TX`) and received (`RX`), and
-each decoded frame after it. It keeps listening for a couple of seconds afterwards
-(`--linger`) to catch any late frames, and logs who ends the connection,
+each decoded frame after its acknowledgement. It keeps listening for a couple
+of seconds afterwards (`--linger`) to log any late frames, raw only, and logs who ends the connection,
 the scale or the script. With `--rescan SECONDS`, it then scans again to show
 how long the scale keeps advertising. Each event is also written to a JSON
 Lines file (`vitafit-capture-<time>.jsonl` by default).
@@ -126,5 +144,6 @@ uv run python scripts/capture.py              # one weigh-in
 uv run python scripts/capture.py --scan-only  # advertisements only
 uv run python scripts/capture.py --rescan 60  # then watch advertising for 60 s
 uv run python scripts/capture.py --unit lb    # also set the display unit (kg, lb or st)
+uv run python scripts/capture.py --no-ack-every-frame  # ack only the stable weight and impedance
 uv run python scripts/capture.py --help       # address filter, timeouts, output file
 ```
