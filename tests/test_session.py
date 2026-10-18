@@ -311,13 +311,13 @@ class HookSession(VitafitSession):
         self.events.append((kind, frame))
 
 
-def _handled(data: bytes) -> list[tuple[str, object]]:
-    """Return the acknowledgement and callback calls for one decoded frame."""
+def _callbacks(data: bytes) -> list[tuple[str, object]]:
+    """Return the callback calls for one decoded frame."""
     frame = decode(data)
     assert frame is not None
     # In the order HookSession registers them.
     kind = "weight" if isinstance(frame, WeightFrame) else "impedance"
-    return [("send", ack_command(data)), (kind, frame), ("frame", frame)]
+    return [(kind, frame), ("frame", frame)]
 
 
 async def test_async_measure_session() -> None:
@@ -333,7 +333,8 @@ async def test_async_measure_session() -> None:
 async def test_session_hooks() -> None:
     """The raw hooks see every frame as it arrives, including late ones.
 
-    The callbacks see each frame after it's acknowledged, during the weigh-in.
+    The callbacks see each frame as the weigh-in takes it, before its
+    acknowledgement, which is sent in order in the background.
     """
     client = FakeClient()
     session = HookSession()
@@ -347,14 +348,19 @@ async def test_session_hooks() -> None:
         ("receive", START_REPLIES[1]),
         ("receive", SETTLING),
         ("receive", STABLE),
-        *_handled(SETTLING),
+        *_callbacks(SETTLING),
+        *_callbacks(STABLE),
+        # Sent while the weigh-in waits for the next frame.
+        ("send", ACK_SETTLING),
         # The scale replies to the stable weight's acknowledgement at once.
         ("send", ACK_STABLE_WEIGHT),
         ("receive", STABLE),
         ("receive", IMPEDANCE),
-        *_handled(STABLE)[1:],
-        *_handled(STABLE),
-        *_handled(IMPEDANCE),
+        *_callbacks(STABLE),
+        *_callbacks(IMPEDANCE),
+        # Sent before async_measure returns.
+        ("send", ACK_STABLE_WEIGHT),
+        ("send", ACK_IMPEDANCE),
     ]
 
     # Notifications after the weigh-in still reach the raw hook only.
@@ -398,8 +404,36 @@ async def test_callback_exception_ends_weigh_in() -> None:
     client = FakeClient()
     with pytest.raises(CallbackError):
         await session.async_measure(client)  # type: ignore[arg-type]
-    # It ended at the first frame, after acknowledging it.
-    assert client.written == [*START_COMMANDS, ACK_SETTLING]
+    # It ended at the first frame, before its queued acknowledgement was sent.
+    assert client.written == list(START_COMMANDS)
+
+
+class FailingAckClient(FakeClient):
+    """Fails the first acknowledgement, then sends another frame if ``stream``."""
+
+    def __init__(self, *, stream: bool) -> None:
+        super().__init__(send_stable=False)
+        self.stream = stream
+
+    async def write_gatt_char(self, uuid: str, data: bytes, *, response: bool) -> None:
+        if data == ACK_SETTLING:
+            if self.stream:
+                self._notify(SETTLING)
+            msg = "write failed"
+            raise BleakError(msg)
+        await super().write_gatt_char(uuid, data, response=response)
+
+
+@pytest.mark.parametrize("stream", [True, False])
+async def test_ack_error_raised(stream: bool) -> None:  # noqa: FBT001
+    """A failed acknowledgement's error ends the weigh-in.
+
+    It's raised at the next frame, or at the timeout if no frame comes.
+    """
+    client = FailingAckClient(stream=stream)
+    session = VitafitSession(weight_timeout=0.1, impedance_timeout=0.1)
+    with pytest.raises(BleakError, match="write failed"):
+        await session.async_measure(client)  # type: ignore[arg-type]
 
 
 async def test_unregister_callback() -> None:

@@ -93,7 +93,7 @@ class RecordingSession(VitafitSession):
         self._raw("rx", NOTIFY_CHARACTERISTIC_UUID, data)
 
     def _on_frame(self, frame: Frame) -> None:
-        """Log a decoded frame, after its acknowledgement."""
+        """Log a decoded frame, before its acknowledgement is sent."""
         _LOGGER.info("    %s", frame)
         self._recorder.record(
             "frame", type=type(frame).__name__, **dataclasses.asdict(frame)

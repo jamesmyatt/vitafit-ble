@@ -65,9 +65,10 @@ class VitafitSession:
     the raw bytes, for example to log the exchange. They only observe; they
     don't change the exchange. ``on_receive`` runs as each notification
     arrives, including any after ``async_measure`` returns, until the client
-    disconnects. The frame callbacks run in ``async_measure``, after any
-    acknowledgement of the frame, so they stop when it returns, and an
-    exception from one ends the weigh-in.
+    disconnects. The frame callbacks run in ``async_measure`` as it takes
+    each frame, so they stop when it returns, and an exception from one ends
+    the weigh-in. Acknowledgements are sent in order in the background, so
+    they don't hold up the callbacks.
 
     Create one per weigh-in. It can be reused for later weigh-ins, but not
     while one is running.
@@ -119,7 +120,7 @@ class VitafitSession:
 
         ``frame_type`` is ``WeightFrame`` (streamed about every 0.36 s),
         ``ImpedanceFrame``, or ``Frame`` for both. Callbacks run during
-        ``async_measure``, after any acknowledgement of the frame. A frame's
+        ``async_measure``, before the frame's acknowledgement is sent. A frame's
         callbacks run in the order registered, whatever their ``frame_type``.
         An exception from a callback ends the weigh-in: ``async_measure``
         raises it. Return a function that unregisters it.
@@ -150,12 +151,33 @@ class VitafitSession:
         report it in time, for example when the user steps off early.
         """
         await self._async_start(client)
+        # A separate task sends the acks, in order, so they don't hold up the
+        # callbacks. None stops it.
+        acks: asyncio.Queue[bytes | None] = asyncio.Queue()
+        sender = asyncio.create_task(self._async_send_acks(client, acks))
+        try:
+            await self._async_take_frames(acks, sender)
+            acks.put_nowait(None)
+            await sender  # Sends the acks still queued; raises a write's error.
+        finally:
+            sender.cancel()
+        measurement = self._measurement()
+        _LOGGER.debug("Result: %s", measurement)
+        return measurement
+
+    async def _async_take_frames(
+        self, acks: asyncio.Queue[bytes | None], sender: asyncio.Task[None]
+    ) -> None:
         loop = asyncio.get_running_loop()
-        # Only taking a frame is timed, so a timeout can't interrupt a write.
+        # Only taking a frame is timed; the sender task does the writes.
         deadline = loop.time() + self._weight_timeout
         _LOGGER.debug("Waiting up to %s s for a stable weight", self._weight_timeout)
         while self._impedance is None:
-            if (queued := await self._async_next_frame(deadline)) is None:
+            if sender.done():
+                sender.result()  # It only stops early if a write failed.
+            try:
+                frame, data = await self._async_next_frame(deadline)
+            except TimeoutError:
                 if self._weight is None:
                     _LOGGER.debug("No stable weight within %s s", self._weight_timeout)
                 else:
@@ -163,8 +185,7 @@ class VitafitSession:
                         "No impedance within %s s; returning weight only",
                         self._impedance_timeout,
                     )
-                break
-            frame, data = queued
+                return
 
             # openScale says acknowledging the stable weight starts the
             # impedance measurement. Untested: no normal-mode weigh-in has
@@ -173,7 +194,7 @@ class VitafitSession:
                 self._weight is None and frame.stable
             )
             if wanted or self._ack_every_frame:
-                await self._async_write(client, ack_command(data))
+                acks.put_nowait(ack_command(data))
             self._dispatch(frame)
 
             if not wanted:
@@ -191,23 +212,22 @@ class VitafitSession:
                 if self._weight is None:
                     _LOGGER.debug("Impedance before a stable weight ends the weigh-in")
 
-        measurement = self._measurement()
-        _LOGGER.debug("Result: %s", measurement)
-        return measurement
+    async def _async_send_acks(
+        self, client: BleakClient, acks: asyncio.Queue[bytes | None]
+    ) -> None:
+        while (ack := await acks.get()) is not None:
+            await self._async_write(client, ack)
 
     async def _async_next_frame(
         self, deadline: float
-    ) -> tuple[WeightFrame | ImpedanceFrame, bytes] | None:
-        """Take the next frame, or return None once ``deadline`` has passed."""
+    ) -> tuple[WeightFrame | ImpedanceFrame, bytes]:
+        """Take the next frame; raise TimeoutError once ``deadline`` has passed."""
         # Checked first: get() doesn't wait while frames are queued, so the
-        # timeout can't fire then, for example while acks fall behind.
+        # timeout can't fire then.
         if asyncio.get_running_loop().time() >= deadline:
-            return None
-        try:
-            async with asyncio.timeout_at(deadline):
-                return await self._frames.get()
-        except TimeoutError:
-            return None
+            raise TimeoutError
+        async with asyncio.timeout_at(deadline):
+            return await self._frames.get()
 
     async def _async_start(self, client: BleakClient) -> None:
         self._frames = asyncio.Queue()

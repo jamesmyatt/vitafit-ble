@@ -131,7 +131,7 @@ command is optional. The frames on this page and the test vectors in
 scans for the scale, logs each advertisement and whether `vitafit-ble`
 recognises it, then connects, lists the GATT services, and runs a
 `VitafitSession`, logging every frame sent (`TX`) and received (`RX`), and
-each decoded frame after its acknowledgement. It keeps listening for a couple
+each decoded frame before its acknowledgement. It keeps listening for a couple
 of seconds afterwards (`--linger`) to log any late frames, raw only, and logs who ends the connection,
 the scale or the script. With `--rescan SECONDS`, it then scans again to show
 how long the scale keeps advertising. Each event is also written to a JSON
