@@ -200,7 +200,7 @@
   <path class="queue" d="M 270 494 A 40 9 0 0 0 350 494"/>
   <text x="310" y="520" text-anchor="middle" class="b">Frame</text>
   <text x="310" y="535" text-anchor="middle" class="b">queue</text>
-  <text class="label" x="310" y="574" text-anchor="middle">(frame, bytes)</text>
+  <text class="label" x="310" y="574" text-anchor="middle">decoded frames</text>
   <path class="flow" d="M 240 372 L 310 372 L 310 485" marker-end="url(#arrow)"/>
   <text class="label" x="254" y="364">yes</text>
   <path class="flow" d="M 350 520 L 400 520" marker-end="url(#arrow)"/>

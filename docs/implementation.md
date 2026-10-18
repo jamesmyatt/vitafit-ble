@@ -74,8 +74,8 @@ weigh-in, and a `BleakError` counts as a failed poll.
 
 - **The notification callback**, `_on_notify`, which Bleak calls for each
   notification. It decodes the frame and passes the raw bytes to
-  `on_receive`. Weight and impedance frames go into the frame queue with their
-  raw bytes; command replies and frames that fail their checks are dropped.
+  `on_receive`. Weight and impedance frames go into the frame queue; command
+  replies and frames that fail their checks are dropped.
 - **The main loop**, which takes frames from the frame queue in order. For each
   frame, it queues the frame's acknowledgement if needed, then runs the frame's
   callbacks, then decides whether the weigh-in has moved on: from waiting for

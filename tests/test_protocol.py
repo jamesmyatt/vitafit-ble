@@ -7,10 +7,10 @@ import logging
 import pytest
 
 from vitafit_ble.protocol import (
-    ACK_IMPEDANCE,
     DisplayUnit,
     ImpedanceCode,
     ImpedanceFrame,
+    WeightFlag,
     WeightFrame,
     ack_command,
     decode,
@@ -40,25 +40,62 @@ from .frames import (
 @pytest.mark.parametrize(
     ("frame", "expected"),
     [
-        (NO_LOAD, WeightFrame(0.0, stable=False, display_unit=DisplayUnit.KG)),
+        (
+            NO_LOAD,
+            WeightFrame(0.0, flag=WeightFlag.NO_LOAD, display_unit=DisplayUnit.KG),
+        ),
         # Display in lb or st: the weight bytes are still 0.01 kg.
-        (NO_LOAD_LB, WeightFrame(0.0, stable=False, display_unit=DisplayUnit.LB)),
-        (SETTLING_LB, WeightFrame(87.7, stable=False, display_unit=DisplayUnit.LB)),
-        (SETTLING_ST, WeightFrame(87.5, stable=False, display_unit=DisplayUnit.ST)),
-        (STABLE_LB, WeightFrame(87.2, stable=True, display_unit=DisplayUnit.LB)),
-        (STABLE_ST, WeightFrame(87.2, stable=True, display_unit=DisplayUnit.ST)),
-        (SETTLING, WeightFrame(87.4, stable=False, display_unit=DisplayUnit.KG)),
-        (STABLE, WeightFrame(87.35, stable=True, display_unit=DisplayUnit.KG)),
-        (STABLE_SOCKS, WeightFrame(88.5, stable=True, display_unit=DisplayUnit.KG)),
+        (
+            NO_LOAD_LB,
+            WeightFrame(0.0, flag=WeightFlag.NO_LOAD, display_unit=DisplayUnit.LB),
+        ),
+        (
+            SETTLING_LB,
+            WeightFrame(87.7, flag=WeightFlag.MEASURING, display_unit=DisplayUnit.LB),
+        ),
+        (
+            SETTLING_ST,
+            WeightFrame(87.5, flag=WeightFlag.MEASURING, display_unit=DisplayUnit.ST),
+        ),
+        (
+            STABLE_LB,
+            WeightFrame(87.2, flag=WeightFlag.STABLE, display_unit=DisplayUnit.LB),
+        ),
+        (
+            STABLE_ST,
+            WeightFrame(87.2, flag=WeightFlag.STABLE, display_unit=DisplayUnit.ST),
+        ),
+        (
+            SETTLING,
+            WeightFrame(87.4, flag=WeightFlag.MEASURING, display_unit=DisplayUnit.KG),
+        ),
+        (
+            STABLE,
+            WeightFrame(87.35, flag=WeightFlag.STABLE, display_unit=DisplayUnit.KG),
+        ),
+        (
+            STABLE_SOCKS,
+            WeightFrame(88.5, flag=WeightFlag.STABLE, display_unit=DisplayUnit.KG),
+        ),
         # Unknown unit code (byte 7 0x2f).
         (
             h("5a 0a 26 10 01 00 00 2f 22 24 14 aa"),
-            WeightFrame(87.4, stable=False, display_unit=None),
+            WeightFrame(87.4, flag=WeightFlag.MEASURING, display_unit=None),
+        ),
+        # Unknown flag (byte 4 0x05): kept as the raw value.
+        (
+            h("5a 0a 26 10 05 00 00 21 22 24 1e aa"),
+            WeightFrame(87.4, flag=5, display_unit=DisplayUnit.KG),
         ),
     ],
 )
 def test_weight(frame: bytes, expected: WeightFrame) -> None:
-    assert decode(frame) == expected
+    result = decode(frame)
+    assert result == expected
+    assert isinstance(result, WeightFrame)
+    assert type(result.flag) is type(expected.flag)
+    # Worked out from the flag: only a stable flag is stable.
+    assert result.stable == (expected.flag == WeightFlag.STABLE)
 
 
 def test_impedance() -> None:
@@ -138,13 +175,21 @@ def test_commands() -> None:
     assert h("a5 05 26 17 01 35 aa") == unit_command(DisplayUnit.KG)  # captured
     assert h("a5 05 26 17 02 36 aa") == unit_command(DisplayUnit.LB)  # captured
     assert h("a5 05 26 17 03 37 aa") == unit_command(DisplayUnit.ST)  # captured
-    assert h("a5 05 26 11 00 32 aa") == ACK_IMPEDANCE
 
 
-def test_ack_command() -> None:
-    """A weight acknowledgement echoes the frame's flag."""
-    assert ack_command(NO_LOAD) == h("a5 05 26 10 00 33 aa")
-    assert ack_command(SETTLING) == h("a5 05 26 10 01 32 aa")  # Vitafit app
-    assert ack_command(STABLE) == h("a5 05 26 10 02 31 aa")  # openScale
-    assert ack_command(IMPEDANCE) == ACK_IMPEDANCE
-    assert ack_command(IMPEDANCE_FAILED) == ACK_IMPEDANCE
+@pytest.mark.parametrize(
+    ("frame", "ack"),
+    [
+        (NO_LOAD, h("a5 05 26 10 00 33 aa")),
+        (SETTLING, h("a5 05 26 10 01 32 aa")),  # Vitafit app
+        (STABLE, h("a5 05 26 10 02 31 aa")),  # openScale
+        (h("5a 0a 26 10 05 00 00 21 22 24 1e aa"), h("a5 05 26 10 05 36 aa")),
+        (IMPEDANCE, h("a5 05 26 11 00 32 aa")),  # openScale
+        (IMPEDANCE_FAILED, h("a5 05 26 11 00 32 aa")),
+    ],
+)
+def test_ack_command(frame: bytes, ack: bytes) -> None:
+    """A weight acknowledgement echoes the frame's flag, even an unknown one."""
+    decoded = decode(frame)
+    assert decoded is not None
+    assert ack_command(decoded) == ack

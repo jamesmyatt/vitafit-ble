@@ -14,6 +14,8 @@ and this project adheres to
 
 - `VitafitSession(ack_every_frame=False)` acknowledges only the stable weight
   and the impedance, as openScale does.
+- `WeightFlag`, exported from `vitafit_ble`: a weight frame's flag, `NO_LOAD`,
+  `MEASURING` or `STABLE`.
 - `ImpedanceFrame.code`: the raw value when there's no impedance reading, an
   `ImpedanceCode` (`FAILED` or `WEIGHT_ONLY`) if it's a known one.
   `ImpedanceCode` is exported from `vitafit_ble`.
@@ -38,13 +40,18 @@ and this project adheres to
 - **An impedance frame ends the weigh-in even before a stable weight, so
   `async_measure()` returns `None` straight away instead of waiting for the
   weight timeout.**
+- **`WeightFrame` has a `flag` field, a `WeightFlag` or the raw value if it's
+  unknown, instead of a `stable` field. `stable` is now a property worked out
+  from `flag`, so reading `frame.stable` still works, but a `WeightFrame` is
+  created with `flag=` instead of `stable=`.**
 - **A frame's callbacks run in the order registered. `Frame` callbacks used to
   run after those for the frame's own class.**
 
 ### Removed
 
-- `vitafit_ble.protocol.ACK_STABLE_WEIGHT`. `ack_command()` builds weight
-  acknowledgements from the frame's flag.
+- `vitafit_ble.protocol.ACK_STABLE_WEIGHT`, `ACK_IMPEDANCE` and `STABLE_FLAG`.
+  `ack_command()` builds acknowledgements from the decoded frame, and
+  `WeightFlag.STABLE` replaces `STABLE_FLAG`.
 
 ## [0.4.0] - 2026-10-12
 

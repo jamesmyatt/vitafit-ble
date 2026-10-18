@@ -35,8 +35,6 @@ MODE_WEIGHT_ONLY = 0x01
 # itself is always sent in 0.01 kg.
 UNIT_BASE = 0x20
 
-STABLE_FLAG = 0x02
-
 MIN_FRAME_LENGTH = 6
 
 # Impedance outside this range is treated as no reading, as openScale does.
@@ -73,6 +71,17 @@ WEIGHT_FRAME_LENGTH = 12
 IMPEDANCE_FRAME_LENGTH = 13
 
 
+class WeightFlag(IntEnum):
+    """Weight frame flag: how far the reading has got."""
+
+    NO_LOAD = 0x00
+    """Nobody is on the scale."""
+    MEASURING = 0x01
+    """The reading is settling."""
+    STABLE = 0x02
+    """The reading has settled."""
+
+
 class ImpedanceCode(IntEnum):
     """Impedance values that mean the scale didn't measure it."""
 
@@ -101,10 +110,15 @@ class WeightFrame(Frame):
 
     weight_kg: float
     """Weight in kg, to 0.01 kg, whatever the display unit."""
-    stable: bool
-    """True once the reading has settled."""
+    flag: int
+    """How far the reading has got: a WeightFlag, or the raw value if unknown."""
     display_unit: DisplayUnit | None
     """Unit the scale is displaying; None if the unit code is unknown."""
+
+    @property
+    def stable(self) -> bool:
+        """True once the reading has settled (``flag`` is WeightFlag.STABLE)."""
+        return self.flag == WeightFlag.STABLE
 
 
 @dataclass(frozen=True, slots=True)
@@ -158,18 +172,17 @@ def start_commands(
         yield unit_command(display_unit)
 
 
-ACK_IMPEDANCE = encode_command(FrameType.IMPEDANCE, b"\x00")
-
-
-def ack_command(frame: bytes) -> bytes:
-    """Build the acknowledgement of a weight or impedance frame that decodes.
+def ack_command(frame: WeightFrame | ImpedanceFrame) -> bytes:
+    """Build the acknowledgement of a decoded weight or impedance frame.
 
     A weight acknowledgement echoes the frame's flag, as the Vitafit app does.
-    An impedance acknowledgement is always ACK_IMPEDANCE.
+    An impedance acknowledgement is always the same.
     """
-    if frame[3] == FrameType.WEIGHT:
-        return encode_command(FrameType.WEIGHT, frame[4:5])
-    return ACK_IMPEDANCE
+    match frame:
+        case WeightFrame(flag=flag):
+            return encode_command(FrameType.WEIGHT, bytes((flag,)))
+        case ImpedanceFrame():  # pragma: no branch
+            return encode_command(FrameType.IMPEDANCE, b"\x00")
 
 
 def _is_valid(frame: bytes) -> bool:
@@ -189,14 +202,14 @@ def _decode_weight(frame: bytes) -> WeightFrame | None:
         return None
     raw = int.from_bytes(frame[8:10], "big")
     try:
+        flag: int = WeightFlag(frame[4])
+    except ValueError:
+        flag = frame[4]
+    try:
         display_unit: DisplayUnit | None = DisplayUnit(frame[7] - UNIT_BASE)
     except ValueError:
         display_unit = None
-    return WeightFrame(
-        weight_kg=raw / 100,
-        stable=frame[4] == STABLE_FLAG,
-        display_unit=display_unit,
-    )
+    return WeightFrame(weight_kg=raw / 100, flag=flag, display_unit=display_unit)
 
 
 def _decode_impedance(frame: bytes) -> ImpedanceFrame | None:

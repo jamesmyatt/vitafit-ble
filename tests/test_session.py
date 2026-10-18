@@ -26,7 +26,6 @@ from vitafit_ble import (
     supported,
 )
 from vitafit_ble.protocol import (
-    ACK_IMPEDANCE,
     ImpedanceFrame,
     WeightFrame,
     ack_command,
@@ -56,8 +55,18 @@ if TYPE_CHECKING:
 
 
 START_COMMANDS = tuple(start_commands())
-ACK_SETTLING = ack_command(SETTLING)
-ACK_STABLE_WEIGHT = ack_command(STABLE)
+
+
+def _ack(frame: bytes) -> bytes:
+    """Return the acknowledgement of a captured frame."""
+    decoded = decode(frame)
+    assert decoded is not None
+    return ack_command(decoded)
+
+
+ACK_SETTLING = _ack(SETTLING)
+ACK_STABLE_WEIGHT = _ack(STABLE)
+ACK_IMPEDANCE = _ack(IMPEDANCE)
 # Everything the session sends, in order: no unit command, so the scale keeps its
 # display unit, and an acknowledgement for every frame, including the stable
 # weight the scale repeats while it measures impedance.
@@ -179,7 +188,7 @@ async def test_set_display_unit(unit: DisplayUnit) -> None:
     assert client.written == [
         *START_COMMANDS,
         unit_command(unit),
-        ack_command(SETTLING_ST),
+        _ack(SETTLING_ST),
         ACK_STABLE_WEIGHT,
         ACK_STABLE_WEIGHT,
         ACK_IMPEDANCE,

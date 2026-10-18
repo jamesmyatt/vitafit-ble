@@ -110,9 +110,7 @@ class VitafitSession:
         self._weight_only = weight_only
         self._ack_every_frame = ack_every_frame
         self._callbacks: list[tuple[type[Frame], Callable[[Frame], None]]] = []
-        self._frames: asyncio.Queue[tuple[WeightFrame | ImpedanceFrame, bytes]] = (
-            asyncio.Queue()
-        )
+        self._frames: asyncio.Queue[WeightFrame | ImpedanceFrame] = asyncio.Queue()
         self._weight: WeightFrame | None = None
         self._impedance: ImpedanceFrame | None = None
 
@@ -180,7 +178,7 @@ class VitafitSession:
             if sender.done():
                 sender.result()  # It only stops early if a write failed.
             try:
-                frame, data = await self._async_next_frame(deadline)
+                frame = await self._async_next_frame(deadline)
             except TimeoutError:
                 if self._weight is None:
                     _LOGGER.debug("No stable weight within %s s", self._weight_timeout)
@@ -200,7 +198,7 @@ class VitafitSession:
             # Optional acks are skipped while one is already waiting to be
             # sent, so a slow link can't build up a backlog.
             if wanted or (self._ack_every_frame and acks.empty()):
-                acks.put_nowait(ack_command(data))
+                acks.put_nowait(ack_command(frame))
             self._dispatch(frame)
 
             if not wanted:
@@ -224,9 +222,7 @@ class VitafitSession:
         while (ack := await acks.get()) is not None:
             await self._async_write(client, ack)
 
-    async def _async_next_frame(
-        self, deadline: float
-    ) -> tuple[WeightFrame | ImpedanceFrame, bytes]:
+    async def _async_next_frame(self, deadline: float) -> WeightFrame | ImpedanceFrame:
         """Take the next frame; raise TimeoutError once ``deadline`` has passed."""
         # Checked first: get() doesn't wait while frames are queued, so the
         # timeout can't fire then.
@@ -256,7 +252,7 @@ class VitafitSession:
         _LOGGER.debug("Received %s: %s", received.hex(" "), frame)
         self.on_receive(received)
         if frame is not None:
-            self._frames.put_nowait((frame, received))
+            self._frames.put_nowait(frame)
 
     async def _async_write(self, client: BleakClient, command: bytes) -> None:
         _LOGGER.debug("Sending %s", command.hex(" "))
