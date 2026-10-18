@@ -52,8 +52,8 @@ Bluetooth adapter or proxy can reach it.
   may go through an ESPHome Bluetooth proxy.
 - **Options:** set from the integration's configuration and entities, such as
   its weight-only mode switch. Options it doesn't set keep their defaults.
-- **Callbacks and hooks:** one `WeightFrame` callback, which updates the
-  real-time weight sensor with each frame. No hooks are overridden.
+- **Callbacks and hooks:** frame callbacks that update the integration's live
+  entities, such as its real-time weight sensor.
 
 The result sets the weight and impedance sensors. `None` keeps the previous
 weigh-in, and a `BleakError` counts as a failed poll.
