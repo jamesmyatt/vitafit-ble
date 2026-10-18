@@ -2,22 +2,12 @@
   <title>VitafitSession.async_measure</title>
   <style>
     :root {
-      --bg: #ffffff; --lane: #f3f4f6; --box: #ffffff; --stroke: #6b7280;
-      --text: #111827; --muted: #4b5563;
-      --decision: #fef3c7; --decision-stroke: #d97706;
-      --queue: #dbeafe; --queue-stroke: #2563eb;
-      --end: #dcfce7; --end-stroke: #16a34a;
-      --error: #fee2e2; --error-stroke: #dc2626;
-    }
-    @media (prefers-color-scheme: dark) {
-      :root {
-        --bg: #111827; --lane: #1f2937; --box: #111827; --stroke: #9ca3af;
-        --text: #f3f4f6; --muted: #d1d5db;
-        --decision: #451a03; --decision-stroke: #f59e0b;
-        --queue: #172554; --queue-stroke: #60a5fa;
-        --end: #052e16; --end-stroke: #22c55e;
-        --error: #450a0a; --error-stroke: #f87171;
-      }
+      --bg: #111827; --lane: #1f2937; --box: #111827; --stroke: #9ca3af;
+      --text: #f3f4f6; --muted: #d1d5db;
+      --decision: #451a03; --decision-stroke: #f59e0b;
+      --queue: #172554; --queue-stroke: #60a5fa;
+      --end: #052e16; --end-stroke: #22c55e;
+      --error: #450a0a; --error-stroke: #f87171;
     }
     .bg { fill: var(--bg); }
     .lane { fill: var(--lane); }
@@ -106,7 +96,7 @@
 
   <rect class="box" x="400" y="644" width="380" height="48" rx="6"/>
   <text x="590" y="663" text-anchor="middle"><tspan class="b">6.4 Queue its ack</tspan> if waited for, or ack_every_frame</text>
-  <text x="590" y="680" text-anchor="middle" class="muted">Not sent yet: the sender sends it when the loop waits</text>
+  <text x="590" y="680" text-anchor="middle" class="muted">Optional acks only if none is waiting; sent later</text>
 
   <rect class="box" x="400" y="712" width="380" height="44" rx="6"/>
   <text x="590" y="730" text-anchor="middle"><tspan class="b">6.5 Run the callbacks</tspan> in registration order</text>
@@ -171,8 +161,8 @@
   <!-- Error box -->
   <rect class="error" x="400" y="1168" width="380" height="52" rx="6"/>
   <text x="590" y="1186" text-anchor="middle"><tspan class="b">⚠ 9. Anything raises</tspan> (write, callback, Ctrl+C)</text>
-  <text x="590" y="1202" text-anchor="middle" class="muted">Cancel the sender; queued acks aren't sent;</text>
-  <text x="590" y="1215" text-anchor="middle" class="muted">the exception goes to the caller, no result</text>
+  <text x="590" y="1202" text-anchor="middle" class="muted">Cancel the sender and wait for it to stop;</text>
+  <text x="590" y="1215" text-anchor="middle" class="muted">queued acks aren't sent; the exception goes to the caller</text>
 
   <!-- ===== Notification callback lane ===== -->
   <path class="dash" d="M 400 166 L 252 166" marker-end="url(#arrow)"/>

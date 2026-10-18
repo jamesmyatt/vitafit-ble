@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from functools import partial
 import logging
 from typing import TYPE_CHECKING, Any
@@ -237,6 +238,32 @@ async def test_timeout_with_backlog(caplog: pytest.LogCaptureFixture) -> None:
     assert "No stable weight within 0.01 s" in caplog.text
 
 
+class BurstClient(FakeClient):
+    """Sends several settling frames at once before the stable weight."""
+
+    def __init__(self) -> None:
+        super().__init__(send_stable=False)
+
+    async def write_gatt_char(self, uuid: str, data: bytes, *, response: bool) -> None:
+        await super().write_gatt_char(uuid, data, response=response)
+        if data == START_COMMANDS[-1]:
+            for _ in range(4):
+                self._notify(SETTLING)
+            self._notify(STABLE)
+
+
+async def test_optional_acks_skipped_while_one_waits() -> None:
+    """Frames that arrive faster than acks are sent don't build up a backlog.
+
+    Only the first settling frame's ack is queued; the stable weight's and the
+    impedance's acks are never skipped.
+    """
+    client = BurstClient()
+    result = await async_measure(client)  # type: ignore[arg-type]
+    assert result == Measurement(87.35, impedance_ohm=466, display_unit=KG)
+    assert client.written == FULL_EXCHANGE
+
+
 async def test_impedance_before_stable_weight(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
@@ -424,16 +451,63 @@ class FailingAckClient(FakeClient):
         await super().write_gatt_char(uuid, data, response=response)
 
 
-@pytest.mark.parametrize("stream", [True, False])
-async def test_ack_error_raised(stream: bool) -> None:  # noqa: FBT001
-    """A failed acknowledgement's error ends the weigh-in.
-
-    It's raised at the next frame, or at the timeout if no frame comes.
-    """
-    client = FailingAckClient(stream=stream)
-    session = VitafitSession(weight_timeout=0.1, impedance_timeout=0.1)
+async def test_ack_error_raised_at_next_frame() -> None:
+    """A failed acknowledgement's error is raised at the next frame."""
+    client = FailingAckClient(stream=True)
+    session = VitafitSession(weight_timeout=5, impedance_timeout=5)
+    loop = asyncio.get_running_loop()
+    start = loop.time()
     with pytest.raises(BleakError, match="write failed"):
         await session.async_measure(client)  # type: ignore[arg-type]
+    # Long before the timeout, so not from waiting for the sender at the end.
+    assert loop.time() - start < 1
+
+
+async def test_ack_error_raised_at_timeout() -> None:
+    """With no more frames, a failed acknowledgement's error ends the weigh-in."""
+    client = FailingAckClient(stream=False)
+    session = VitafitSession(weight_timeout=0.1)
+    with pytest.raises(BleakError, match="write failed"):
+        await session.async_measure(client)  # type: ignore[arg-type]
+
+
+class SlowAckClient(FakeClient):
+    """Sends another frame during the first acknowledgement, which never finishes."""
+
+    def __init__(self) -> None:
+        super().__init__(send_stable=False)
+        self.ack_cancelled = False
+
+    async def write_gatt_char(self, uuid: str, data: bytes, *, response: bool) -> None:
+        if data != ACK_SETTLING:
+            await super().write_gatt_char(uuid, data, response=response)
+            return
+        self._notify(SETTLING)
+        try:
+            await asyncio.sleep(10)
+        except asyncio.CancelledError:
+            self.ack_cancelled = True
+            raise
+
+
+async def test_sender_stopped_before_return() -> None:
+    """An acknowledgement still being written is stopped before async_measure ends.
+
+    So the caller doesn't disconnect while it's still running.
+    """
+    session = VitafitSession()
+    calls: list[WeightFrame] = []
+
+    def _fail_second(frame: WeightFrame) -> None:
+        calls.append(frame)
+        if len(calls) == 2:
+            raise CallbackError
+
+    session.register_callback(WeightFrame, _fail_second)
+    client = SlowAckClient()
+    with pytest.raises(CallbackError):
+        await session.async_measure(client)  # type: ignore[arg-type]
+    assert client.ack_cancelled
 
 
 async def test_unregister_callback() -> None:

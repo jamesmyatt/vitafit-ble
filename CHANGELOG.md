@@ -26,8 +26,9 @@ and this project adheres to
 
 - **The weigh-in acknowledges every weight and impedance frame that decodes,
   as the Vitafit app does, so that the scale replaces any frame that went
-  missing or failed its checks. It used to acknowledge only the stable weight
-  and the impedance.**
+  missing or failed its checks. While an acknowledgement is waiting to be
+  sent, the extra ones are skipped. It used to acknowledge only the stable
+  weight and the impedance.**
 - **Frame callbacks run during `async_measure()` as it takes each frame,
   instead of as each notification arrives, so they stop when it returns.
   Acknowledgements are sent in order in the background, so they don't hold up

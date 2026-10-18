@@ -161,6 +161,7 @@ class VitafitSession:
             await sender  # Sends the acks still queued; raises a write's error.
         finally:
             sender.cancel()
+            await asyncio.wait({sender})
         measurement = self._measurement()
         _LOGGER.debug("Result: %s", measurement)
         return measurement

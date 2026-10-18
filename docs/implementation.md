@@ -60,7 +60,15 @@ weigh-in, and a `BleakError` counts as a failed poll.
 
 ## How `async_measure` runs a weigh-in
 
-![How VitafitSession.async_measure runs a weigh-in](_static/async-measure.svg)
+```{image} _static/async-measure-light.svg
+:alt: How VitafitSession.async_measure runs a weigh-in
+:class: only-light
+```
+
+```{image} _static/async-measure-dark.svg
+:alt: How VitafitSession.async_measure runs a weigh-in
+:class: only-dark
+```
 
 `VitafitSession.async_measure` uses three parts, which run at the same time:
 
@@ -71,7 +79,10 @@ weigh-in, and a `BleakError` counts as a failed poll.
 - **The main loop**, which takes frames from the frame queue in order. For each
   frame, it queues the frame's acknowledgement if needed, then runs the frame's
   callbacks, then decides whether the weigh-in has moved on: from waiting for
-  a stable weight to waiting for impedance, or to the end.
+  a stable weight to waiting for impedance, or to the end. An optional
+  acknowledgement, one that `ack_every_frame` adds, is only queued if none is
+  already waiting, so a slow link can't build up a backlog. The stable
+  weight's and the impedance's are always queued.
 - **The ack sender**, a separate task that sends the queued acknowledgements in
   order, waiting for each write's response. It only runs while the main loop
   is waiting, so acknowledgements don't hold up the callbacks.
@@ -87,4 +98,6 @@ Before returning, `async_measure` waits for the ack sender to send the
 acknowledgements still queued, such as the impedance acknowledgement, so they
 go out before the caller disconnects. If a write fails, its `BleakError` is
 raised before the main loop takes another frame, or at the end. If anything
-raises, the ack sender is cancelled and the exception goes to the caller.
+raises, the ack sender is cancelled, and `async_measure` waits for it to stop,
+so the caller doesn't disconnect during a write; then the exception goes to
+the caller.

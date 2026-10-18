@@ -66,6 +66,8 @@ Acknowledgements:
 - `vitafit-ble` acknowledges every weight and impedance frame that decodes, as
   the Vitafit app does, so that the scale replaces any frame that went missing
   or failed its checks. A frame that fails its checks isn't acknowledged.
+  While an acknowledgement is waiting to be sent, it skips the extra ones, but
+  never the stable weight's or the impedance's.
   `VitafitSession(ack_every_frame=False)` acknowledges only the stable weight
   and the impedance, as openScale does.
 - No effect of acknowledging the settling frames has been seen.
