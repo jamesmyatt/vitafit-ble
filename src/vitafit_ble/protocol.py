@@ -200,20 +200,17 @@ def _decode_impedance(frame: bytes) -> ImpedanceFrame | None:
         _LOGGER.debug("Impedance frame has wrong length: %s", frame.hex(" "))
         return None
     ohm = int.from_bytes(frame[9:11], "big")
-    code: int = ohm
     match ohm:
         case ImpedanceCode.FAILED:
             _LOGGER.debug("Impedance not measured: no contact, e.g. socks")
-            code = ImpedanceCode.FAILED
         case ImpedanceCode.WEIGHT_ONLY:
             _LOGGER.debug("Impedance not measured: weight-only mode")
-            code = ImpedanceCode.WEIGHT_ONLY
         case _ if IMPEDANCE_MIN_OHM <= ohm <= IMPEDANCE_MAX_OHM:
             return ImpedanceFrame(impedance_ohm=ohm)
         case _:
             _LOGGER.debug("Impedance out of range: %s Ω", ohm)
-    # Still a valid frame, unlike None, so the session acks it and stops waiting.
-    return ImpedanceFrame(impedance_ohm=None, code=code)
+            return ImpedanceFrame(impedance_ohm=None, code=ohm)
+    return ImpedanceFrame(impedance_ohm=None, code=ImpedanceCode(ohm))
 
 
 # Decoder for each frame type that decode() turns into a Frame. Other valid

@@ -28,9 +28,14 @@ and this project adheres to
   as the Vitafit app does, so that the scale replaces any frame that went
   missing or failed its checks. It used to acknowledge only the stable weight
   and the impedance.**
-- **Frame callbacks run during `async_measure()`, after the frame is
-  acknowledged, instead of as each notification arrives, so they stop when it
-  returns. `on_receive()` still sees every notification until disconnecting.**
+- **Frame callbacks run during `async_measure()`, after any acknowledgement of
+  the frame, instead of as each notification arrives, so they stop when it
+  returns. `on_receive()` still sees every notification until disconnecting.
+  An exception from a callback now ends the weigh-in, and `async_measure()`
+  raises it.**
+- **An impedance frame ends the weigh-in even before a stable weight, so
+  `async_measure()` returns `None` straight away instead of waiting for the
+  weight timeout.**
 - **A frame's callbacks run in the order registered. `Frame` callbacks used to
   run after those for the frame's own class.**
 

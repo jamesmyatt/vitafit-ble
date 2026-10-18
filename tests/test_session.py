@@ -220,6 +220,37 @@ async def test_corrupt_frame_not_acknowledged() -> None:
     ]
 
 
+class BacklogClient(FakeClient):
+    """Sends another frame before each acknowledgement finishes, as a slow link can."""
+
+    async def write_gatt_char(self, uuid: str, data: bytes, *, response: bool) -> None:
+        await super().write_gatt_char(uuid, data, response=response)
+        if data == ACK_SETTLING:
+            self._notify(SETTLING)
+
+
+async def test_timeout_with_backlog(caplog: pytest.LogCaptureFixture) -> None:
+    """The weight timeout still ends the weigh-in while frames are queued."""
+    client = BacklogClient(send_stable=False)
+    with caplog.at_level(logging.DEBUG, logger="vitafit_ble.session"):
+        assert await async_measure(client, VitafitSession(weight_timeout=0.01)) is None  # type: ignore[arg-type]
+    assert "No stable weight within 0.01 s" in caplog.text
+
+
+async def test_impedance_before_stable_weight(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """An impedance frame ends the weigh-in, even before a stable weight."""
+    client = FakeClient(first=IMPEDANCE, send_stable=False)
+    with caplog.at_level(logging.DEBUG, logger="vitafit_ble.session"):
+        result = await async_measure(client, VitafitSession(weight_timeout=5))  # type: ignore[arg-type]
+    assert result is None
+    # Acknowledged so the scale stops repeating it; nothing after it is.
+    assert client.written == [*START_COMMANDS, ACK_IMPEDANCE]
+    assert "Impedance before a stable weight ends the weigh-in" in caplog.text
+    assert "No stable weight within" not in caplog.text
+
+
 async def test_impedance_failed() -> None:
     """In socks, the scale reports a failed impedance; return at once without it."""
     client = FakeClient(impedance=IMPEDANCE_FAILED)
@@ -350,6 +381,25 @@ async def test_multiple_callbacks() -> None:
 
 def _append(calls: list[tuple[str, Frame]], name: str, frame: Frame) -> None:
     calls.append((name, frame))
+
+
+class CallbackError(Exception):
+    """Raised by a test callback."""
+
+
+async def test_callback_exception_ends_weigh_in() -> None:
+    """An exception from a callback is raised by async_measure."""
+    session = VitafitSession()
+
+    def _fail(_: WeightFrame) -> None:
+        raise CallbackError
+
+    session.register_callback(WeightFrame, _fail)
+    client = FakeClient()
+    with pytest.raises(CallbackError):
+        await session.async_measure(client)  # type: ignore[arg-type]
+    # It ended at the first frame, after acknowledging it.
+    assert client.written == [*START_COMMANDS, ACK_SETTLING]
 
 
 async def test_unregister_callback() -> None:

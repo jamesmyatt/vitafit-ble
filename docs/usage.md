@@ -105,8 +105,9 @@ class PrintingSession(VitafitSession):
 
 These only observe the exchange. `on_receive` runs as each notification
 arrives, including after `async_measure()` returns, until you disconnect. The
-callbacks run during `async_measure()`, after each frame is acknowledged, so
-they stop when it returns. `scripts/capture.py` logs a weigh-in this way.
+callbacks run during `async_measure()`, after any acknowledgement of the
+frame, so they stop when it returns. An exception from a callback ends the weigh-in, and
+`async_measure()` raises it. `scripts/capture.py` logs a weigh-in this way.
 
 ## Building a `BluetoothServiceInfoBleak` outside Home Assistant
 
