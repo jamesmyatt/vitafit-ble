@@ -96,7 +96,7 @@
 
   <rect class="box" x="400" y="644" width="380" height="48" rx="6"/>
   <text x="590" y="663" text-anchor="middle"><tspan class="b">6.4 Queue its ack</tspan> if waited for, or ack_every_frame</text>
-  <text x="590" y="680" text-anchor="middle" class="muted">Optional acks only if none is waiting; sent later</text>
+  <text x="590" y="680" text-anchor="middle" class="muted">Optional: known flag, none waiting; sent later</text>
 
   <rect class="box" x="400" y="712" width="380" height="44" rx="6"/>
   <text x="590" y="730" text-anchor="middle"><tspan class="b">6.5 Run the callbacks</tspan> in registration order</text>

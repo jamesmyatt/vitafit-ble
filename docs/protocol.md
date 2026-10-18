@@ -38,9 +38,9 @@ The frames, in the order `vitafit-ble` runs them, after subscribing:
 | `0x17` `UNIT`      | Client → scale | `a5 05 26 17 <code> <chk> aa`                            | Optional: set the display unit, `code` 01 kg, 02 lb, 03 st. Only sent when `VitafitSession` is given `display_unit`.                                                                                                                                     |
 | `0x17` `UNIT`      | Scale → client | `5a 04 26 17 35 aa`                                      | Reply, the same for every unit. Not decoded.                                                                                                                                                                                                             |
 | `0x10` `WEIGHT`    | Scale → client | `5a 0a 26 10 <flag> 00 00 <unit> <w_hi> <w_lo> <chk> aa` | Weight, 0.01 kg, big-endian, whatever the display unit. `flag` is 0x00 with no load, 0x01 while measuring and 0x02 when stable. `unit` is 0x20 + the display unit: 0x21 kg, 0x22 lb, 0x23 st. Streamed throughout, from as soon as notifications are on. |
-| `0x10` `WEIGHT`    | Client → scale | `a5 05 26 10 <flag> <chk> aa`                            | Acknowledge a weight frame, echoing its `flag`: `a5 05 26 10 01 32 aa` while measuring, `a5 05 26 10 02 31 aa` when stable. `vitafit-ble` acknowledges every weight frame by default; see below.                                                         |
+| `0x10` `WEIGHT`    | Client → scale | `a5 05 26 10 <flag> <chk> aa`                            | Acknowledge a weight frame, echoing its `flag`: `a5 05 26 10 01 32 aa` while measuring, `a5 05 26 10 02 31 aa` when stable. `vitafit-ble` acknowledges weight frames by default; see below.                                                              |
 | `0x11` `IMPEDANCE` | Scale → client | `5a 0b 26 11 00 00 00 00 00 <z_hi> <z_lo> <chk> aa`      | Impedance, Ω, big-endian. `0xFFFF` means the scale couldn't measure it, for example through socks; `0x55AA` means weight-only mode.                                                                                                                      |
-| `0x11` `IMPEDANCE` | Client → scale | `a5 05 26 11 00 32 aa`                                   | Acknowledge impedance. `vitafit-ble` acknowledges every impedance frame by default.                                                                                                                                                                      |
+| `0x11` `IMPEDANCE` | Client → scale | `a5 05 26 11 00 32 aa`                                   | Acknowledge impedance. `vitafit-ble` always acknowledges the first impedance frame, which ends its weigh-in.                                                                                                                                             |
 
 Starting the impedance measurement:
 
@@ -63,11 +63,13 @@ Acknowledgements:
   impedance.
 - The Vitafit app acknowledges every weight frame, including each settling
   frame (`a5 05 26 10 01 32 aa`), and the impedance.
-- `vitafit-ble` acknowledges every weight and impedance frame that decodes, as
-  the Vitafit app does, so that the scale replaces any frame that went missing
-  or failed its checks. A frame that fails its checks isn't acknowledged.
-  While an acknowledgement is waiting to be sent, it skips the extra ones, but
-  never the stable weight's or the impedance's.
+- `vitafit-ble` acknowledges each weight frame that decodes, as the Vitafit
+  app does, so that the scale replaces any frame that went missing or failed
+  its checks, and the first impedance frame, which ends the weigh-in. A frame
+  that fails its checks isn't acknowledged. It skips the extra weight
+  acknowledgements while one is waiting to be sent, and for a flag no capture
+  has shown, as the scale's response to it is unknown. It never skips the
+  stable weight's or the impedance's.
   `VitafitSession(ack_every_frame=False)` acknowledges only the stable weight
   and the impedance, as openScale does.
 - No effect of acknowledging the settling frames has been seen.

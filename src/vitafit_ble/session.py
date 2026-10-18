@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 import logging
-from typing import TYPE_CHECKING, TypeVar, cast
+from typing import TYPE_CHECKING, cast
 
 from .const import (
     IMPEDANCE_TIMEOUT,
@@ -31,8 +31,6 @@ if TYPE_CHECKING:
     from .protocol import DisplayUnit
 
 _LOGGER = logging.getLogger(__name__)
-
-_FrameT = TypeVar("_FrameT", bound=Frame)
 
 
 @dataclass(frozen=True, slots=True)
@@ -100,8 +98,9 @@ class VitafitSession:
         impedance frame, as the Vitafit app does, so that the scale replaces
         any frame that went missing or failed its checks. While an ack is
         already waiting to be sent, the extra ones are skipped, so a slow link
-        can't build up a backlog; the stable weight's and the impedance's acks
-        are never skipped. Without it, only acknowledge the stable weight and
+        can't build up a backlog, and so are acks for weight flags that aren't
+        a WeightFlag; the stable weight's and the impedance's acks are never
+        skipped. Without it, only acknowledge the stable weight and
         the impedance, as openScale does.
         """
         self._weight_timeout = weight_timeout
@@ -114,8 +113,8 @@ class VitafitSession:
         self._weight: WeightFrame | None = None
         self._impedance: ImpedanceFrame | None = None
 
-    def register_callback(
-        self, frame_type: type[_FrameT], callback: Callable[[_FrameT], None]
+    def register_callback[FrameT: Frame](
+        self, frame_type: type[FrameT], callback: Callable[[FrameT], None]
     ) -> Callable[[], None]:
         """Call ``callback`` with each decoded frame of ``frame_type``.
 
@@ -196,9 +195,12 @@ class VitafitSession:
                 self._weight is None and frame.stable
             )
             # Optional acks are skipped while one is already waiting to be
-            # sent, so a slow link can't build up a backlog.
-            if wanted or (self._ack_every_frame and acks.empty()):
-                acks.put_nowait(ack_command(frame))
+            # sent, so a slow link can't build up a backlog. ack_command gives
+            # None for a weight flag that has no known ack.
+            if (wanted or (self._ack_every_frame and acks.empty())) and (
+                ack := ack_command(frame)
+            ) is not None:
+                acks.put_nowait(ack)
             self._dispatch(frame)
 
             if not wanted:

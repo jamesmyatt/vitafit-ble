@@ -183,13 +183,14 @@ def test_commands() -> None:
         (NO_LOAD, h("a5 05 26 10 00 33 aa")),
         (SETTLING, h("a5 05 26 10 01 32 aa")),  # Vitafit app
         (STABLE, h("a5 05 26 10 02 31 aa")),  # openScale
-        (h("5a 0a 26 10 05 00 00 21 22 24 1e aa"), h("a5 05 26 10 05 36 aa")),
+        # Unknown flag (0x05): no known acknowledgement.
+        (h("5a 0a 26 10 05 00 00 21 22 24 1e aa"), None),
         (IMPEDANCE, h("a5 05 26 11 00 32 aa")),  # openScale
         (IMPEDANCE_FAILED, h("a5 05 26 11 00 32 aa")),
     ],
 )
-def test_ack_command(frame: bytes, ack: bytes) -> None:
-    """A weight acknowledgement echoes the frame's flag, even an unknown one."""
+def test_ack_command(frame: bytes, ack: bytes | None) -> None:
+    """A weight acknowledgement echoes the frame's flag, if it's a known one."""
     decoded = decode(frame)
     assert decoded is not None
     assert ack_command(decoded) == ack

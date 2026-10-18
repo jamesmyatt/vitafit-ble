@@ -24,7 +24,7 @@ import logging
 from pathlib import Path
 import sys
 import time
-from typing import TYPE_CHECKING, Any, TextIO
+from typing import TYPE_CHECKING, Any, TextIO, override
 
 from bleak import BleakScanner
 from bleak.exc import BleakError
@@ -84,10 +84,12 @@ class RecordingSession(VitafitSession):
         self._recorder = recorder
         self.register_callback(Frame, self._on_frame)
 
+    @override
     def on_send(self, data: bytes) -> None:
         """Log a command."""
         self._raw("tx", WRITE_CHARACTERISTIC_UUID, data)
 
+    @override
     def on_receive(self, data: bytes) -> None:
         """Log a notification."""
         self._raw("rx", NOTIFY_CHARACTERISTIC_UUID, data)

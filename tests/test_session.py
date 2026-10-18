@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from functools import partial
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, override
 from unittest.mock import AsyncMock, patch
 
 from bleak.backends.device import BLEDevice
@@ -61,7 +61,9 @@ def _ack(frame: bytes) -> bytes:
     """Return the acknowledgement of a captured frame."""
     decoded = decode(frame)
     assert decoded is not None
-    return ack_command(decoded)
+    ack = ack_command(decoded)
+    assert ack is not None
+    return ack
 
 
 ACK_SETTLING = _ack(SETTLING)
@@ -233,6 +235,7 @@ async def test_corrupt_frame_not_acknowledged() -> None:
 class BacklogClient(FakeClient):
     """Sends another frame before each acknowledgement finishes, as a slow link can."""
 
+    @override
     async def write_gatt_char(self, uuid: str, data: bytes, *, response: bool) -> None:
         await super().write_gatt_char(uuid, data, response=response)
         if data == ACK_SETTLING:
@@ -253,6 +256,7 @@ class BurstClient(FakeClient):
     def __init__(self) -> None:
         super().__init__(send_stable=False)
 
+    @override
     async def write_gatt_char(self, uuid: str, data: bytes, *, response: bool) -> None:
         await super().write_gatt_char(uuid, data, response=response)
         if data == START_COMMANDS[-1]:
@@ -271,6 +275,23 @@ async def test_optional_acks_skipped_while_one_waits() -> None:
     result = await async_measure(client)  # type: ignore[arg-type]
     assert result == Measurement(87.35, impedance_ohm=466, display_unit=KG)
     assert client.written == FULL_EXCHANGE
+
+
+# A weight frame with a flag no capture has shown (0x05).
+UNKNOWN_FLAG = bytes.fromhex("5a 0a 26 10 05 00 00 21 22 24 1e aa")
+
+
+async def test_unknown_flag_not_acknowledged() -> None:
+    """A weight frame with an unknown flag gets no optional ack."""
+    client = FakeClient(first=UNKNOWN_FLAG)
+    result = await async_measure(client)  # type: ignore[arg-type]
+    assert result == Measurement(87.35, impedance_ohm=466, display_unit=KG)
+    assert client.written == [
+        *START_COMMANDS,
+        ACK_STABLE_WEIGHT,
+        ACK_STABLE_WEIGHT,
+        ACK_IMPEDANCE,
+    ]
 
 
 async def test_impedance_before_stable_weight(
@@ -337,9 +358,11 @@ class HookSession(VitafitSession):
         self.register_callback(ImpedanceFrame, partial(self._record, "impedance"))
         self.register_callback(Frame, partial(self._record, "frame"))
 
+    @override
     def on_send(self, data: bytes) -> None:
         self.events.append(("send", data))
 
+    @override
     def on_receive(self, data: bytes) -> None:
         self.events.append(("receive", data))
 
@@ -451,6 +474,7 @@ class FailingAckClient(FakeClient):
         super().__init__(send_stable=False)
         self.stream = stream
 
+    @override
     async def write_gatt_char(self, uuid: str, data: bytes, *, response: bool) -> None:
         if data == ACK_SETTLING:
             if self.stream:
@@ -487,6 +511,7 @@ class SlowAckClient(FakeClient):
         super().__init__(send_stable=False)
         self.ack_cancelled = False
 
+    @override
     async def write_gatt_char(self, uuid: str, data: bytes, *, response: bool) -> None:
         if data != ACK_SETTLING:
             await super().write_gatt_char(uuid, data, response=response)

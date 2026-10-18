@@ -16,7 +16,7 @@ Unofficial; not affiliated with Vitafit.
 pip install vitafit-ble
 ```
 
-Supports and tests Python 3.14+, following the latest stable [Home Assistant Core](https://github.com/home-assistant/core). Python 3.11-3.13 are best effort.
+Supports and tests Python 3.14+, following the latest stable [Home Assistant Core](https://github.com/home-assistant/core). Python 3.12-3.13 are best effort.
 
 ## Use
 

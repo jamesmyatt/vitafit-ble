@@ -172,15 +172,19 @@ def start_commands(
         yield unit_command(display_unit)
 
 
-def ack_command(frame: WeightFrame | ImpedanceFrame) -> bytes:
+def ack_command(frame: WeightFrame | ImpedanceFrame) -> bytes | None:
     """Build the acknowledgement of a decoded weight or impedance frame.
 
     A weight acknowledgement echoes the frame's flag, as the Vitafit app does.
-    An impedance acknowledgement is always the same.
+    Return None for a flag that isn't a WeightFlag, as no capture shows how the
+    scale treats its acknowledgement. An impedance acknowledgement is always
+    the same.
     """
     match frame:
-        case WeightFrame(flag=flag):
+        case WeightFrame(flag=WeightFlag() as flag):
             return encode_command(FrameType.WEIGHT, bytes((flag,)))
+        case WeightFrame():
+            return None
         case ImpedanceFrame():  # pragma: no branch
             return encode_command(FrameType.IMPEDANCE, b"\x00")
 
