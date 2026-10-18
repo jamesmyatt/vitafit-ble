@@ -27,7 +27,6 @@ from vitafit_ble import (
 )
 from vitafit_ble.protocol import (
     ACK_IMPEDANCE,
-    ACK_STABLE_WEIGHT,
     ImpedanceFrame,
     WeightFrame,
     ack_command,
@@ -58,6 +57,7 @@ if TYPE_CHECKING:
 
 START_COMMANDS = tuple(start_commands())
 ACK_SETTLING = ack_command(SETTLING)
+ACK_STABLE_WEIGHT = ack_command(STABLE)
 # Everything the session sends, in order: no unit command, so the scale keeps its
 # display unit, and an acknowledgement for every frame, including the stable
 # weight the scale repeats while it measures impedance.

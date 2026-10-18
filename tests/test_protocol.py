@@ -8,7 +8,6 @@ import pytest
 
 from vitafit_ble.protocol import (
     ACK_IMPEDANCE,
-    ACK_STABLE_WEIGHT,
     DisplayUnit,
     ImpedanceCode,
     ImpedanceFrame,
@@ -139,7 +138,6 @@ def test_commands() -> None:
     assert h("a5 05 26 17 01 35 aa") == unit_command(DisplayUnit.KG)  # captured
     assert h("a5 05 26 17 02 36 aa") == unit_command(DisplayUnit.LB)  # captured
     assert h("a5 05 26 17 03 37 aa") == unit_command(DisplayUnit.ST)  # captured
-    assert h("a5 05 26 10 02 31 aa") == ACK_STABLE_WEIGHT
     assert h("a5 05 26 11 00 32 aa") == ACK_IMPEDANCE
 
 
@@ -147,6 +145,6 @@ def test_ack_command() -> None:
     """A weight acknowledgement echoes the frame's flag."""
     assert ack_command(NO_LOAD) == h("a5 05 26 10 00 33 aa")
     assert ack_command(SETTLING) == h("a5 05 26 10 01 32 aa")  # Vitafit app
-    assert ack_command(STABLE) == ACK_STABLE_WEIGHT
+    assert ack_command(STABLE) == h("a5 05 26 10 02 31 aa")  # openScale
     assert ack_command(IMPEDANCE) == ACK_IMPEDANCE
     assert ack_command(IMPEDANCE_FAILED) == ACK_IMPEDANCE

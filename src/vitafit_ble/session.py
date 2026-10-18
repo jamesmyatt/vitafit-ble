@@ -281,7 +281,8 @@ async def async_measure(
     ``session`` sets the options and callbacks; by default a ``VitafitSession()``.
     For example ``await async_measure(client, VitafitSession(weight_only=True))``.
 
-    Return None if no stable weight arrives in time.
+    Return None if no stable weight arrives in time, or if the impedance
+    arrives first.
     """
     if session is None:
         session = VitafitSession()

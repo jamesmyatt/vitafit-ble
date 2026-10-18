@@ -8,7 +8,7 @@ and this project adheres to
 
 ## [Unreleased]
 
-## [0.5.0] - 2026-10-17
+## [0.5.0] - 2026-10-18
 
 ### Added
 
@@ -40,6 +40,11 @@ and this project adheres to
   weight timeout.**
 - **A frame's callbacks run in the order registered. `Frame` callbacks used to
   run after those for the frame's own class.**
+
+### Removed
+
+- `vitafit_ble.protocol.ACK_STABLE_WEIGHT`. `ack_command()` builds weight
+  acknowledgements from the frame's flag.
 
 ## [0.4.0] - 2026-10-12
 

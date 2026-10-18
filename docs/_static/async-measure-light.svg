@@ -152,8 +152,8 @@
 
   <!-- Timeout exit: 6.2 → 7 -->
   <path class="flow" d="M 780 520 L 815 520 L 815 980 L 780 980" marker-end="url(#arrow)"/>
-  <text class="label" x="822" y="500">no frame by</text>
-  <text class="label" x="822" y="513">the deadline</text>
+  <text class="label" x="822" y="500">deadline</text>
+  <text class="label" x="822" y="513">passed</text>
   <text class="label" x="822" y="945">log “No stable</text>
   <text class="label" x="822" y="958">weight…” or “No</text>
   <text class="label" x="822" y="971">impedance…”</text>

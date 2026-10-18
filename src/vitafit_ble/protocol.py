@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import IntEnum
-from functools import reduce
+from functools import cache, reduce
 import logging
 from operator import xor
 from typing import TYPE_CHECKING
@@ -126,6 +126,12 @@ def _checksum(data: Iterable[int]) -> int:
 
 def encode_command(frame_type: FrameType, data: bytes = b"") -> bytes:
     """Build a client-to-scale command frame."""
+    # Typed wrapper: functools.cache hides the arguments' types from mypy.
+    return _encode_command(frame_type, data)
+
+
+@cache
+def _encode_command(frame_type: FrameType, data: bytes) -> bytes:
     body = (len(data) + 4, PRODUCT_ID, frame_type, *data)
     return bytes((HEADER_CLIENT, *body, _checksum(body), TRAILER))
 
@@ -152,16 +158,14 @@ def start_commands(
         yield unit_command(display_unit)
 
 
-ACK_STABLE_WEIGHT = encode_command(FrameType.WEIGHT, bytes((STABLE_FLAG,)))
 ACK_IMPEDANCE = encode_command(FrameType.IMPEDANCE, b"\x00")
 
 
 def ack_command(frame: bytes) -> bytes:
     """Build the acknowledgement of a weight or impedance frame that decodes.
 
-    A weight acknowledgement echoes the frame's flag, as the Vitafit app does,
-    so it's ACK_STABLE_WEIGHT for a stable weight. An impedance acknowledgement
-    is always ACK_IMPEDANCE.
+    A weight acknowledgement echoes the frame's flag, as the Vitafit app does.
+    An impedance acknowledgement is always ACK_IMPEDANCE.
     """
     if frame[3] == FrameType.WEIGHT:
         return encode_command(FrameType.WEIGHT, frame[4:5])

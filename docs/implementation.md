@@ -88,9 +88,9 @@ weigh-in, and a `BleakError` counts as a failed poll.
   is waiting, so acknowledgements don't hold up the callbacks.
 
 The weigh-in ends when an impedance frame arrives, whether or not a stable
-weight came first, or when no frame arrives before the deadline. The deadline
-is `weight_timeout` from the start, then `impedance_timeout` from the stable
-weight. Only taking a frame is timed, and the deadline is checked before each
+weight came first, or when the deadline passes, however many other frames
+arrive. The deadline is `weight_timeout` from the start, then
+`impedance_timeout` from the stable weight. Only taking a frame is timed, and the deadline is checked before each
 one, because taking from a queue that has frames in it never waits, so a
 timeout alone couldn't fire while frames keep arriving.
 

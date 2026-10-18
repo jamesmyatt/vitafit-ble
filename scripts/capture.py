@@ -188,7 +188,7 @@ class WeighInOptions:
     weight_timeout: float
     """Seconds to wait for a stable weight."""
     impedance_timeout: float
-    """Seconds to wait for impedance after the ack."""
+    """Seconds to wait for impedance after the stable weight."""
     linger: float
     """Seconds to keep listening after the weigh-in."""
     unit: DisplayUnit | None
@@ -296,7 +296,8 @@ def _parse_args() -> argparse.Namespace:
         "--impedance-timeout",
         type=float,
         default=IMPEDANCE_TIMEOUT,
-        help="seconds to wait for impedance after the ack (default: %(default)s)",
+        help="seconds to wait for impedance after the stable weight "
+        "(default: %(default)s)",
     )
     parser.add_argument(
         "--unit",
