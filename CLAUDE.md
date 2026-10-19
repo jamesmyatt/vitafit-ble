@@ -64,6 +64,6 @@ Releases are published by `.github/workflows/release.yml` when a GitHub release 
 To release:
 
 1. Bump `version` in `pyproject.toml`.
-2. In `CHANGELOG.md`, rename `[Unreleased]` to `[X.Y.Z] - YYYY-MM-DD`, add a new empty `[Unreleased]` section, and update the links at the bottom.
+2. In `CHANGELOG.md`, rename `[Unreleased]` to `[X.Y.Z] - YYYY-MM-DD`, add a new empty `[Unreleased]` section, and update the links at the bottom. Update the Status section of this file to match.
 3. Publish a GitHub release named `vX.Y.Z`.
 4. Update `requirements` in `../ha-vitafit-ble/custom_components/vitafit_ble/manifest.json` and that repo's `requirements_dev.txt`.
