@@ -198,7 +198,7 @@ class WeighInOptions:
     weight_only: bool
     """Select the scale's weight-only mode instead of measuring impedance."""
     ack_every_frame: bool
-    """Acknowledge every weight and impedance frame, not just the stable weight."""
+    """Also acknowledge settling and stable weight frames, not just the first."""
 
 
 async def _async_weigh_in(
@@ -334,9 +334,9 @@ def _parse_args() -> argparse.Namespace:
         "--ack-every-frame",
         action=argparse.BooleanOptionalAction,
         default=True,
-        help="acknowledge every weight and impedance frame, as the Vitafit app "
-        "does; with --no-ack-every-frame, only the stable weight and the "
-        "impedance, as openScale does (default: %(default)s)",
+        help="also acknowledge each settling and stable weight frame, as the "
+        "Vitafit app does; with --no-ack-every-frame, only the first stable "
+        "weight and the impedance, as openScale does (default: %(default)s)",
     )
     parser.add_argument(
         "-v",

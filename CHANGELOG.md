@@ -27,12 +27,12 @@ and this project adheres to
 ### Changed
 
 - **Requires Python 3.12 or later, up from 3.11.**
-- **The weigh-in acknowledges every weight and impedance frame that decodes,
-  as the Vitafit app does, so that the scale replaces any frame that went
-  missing or failed its checks. While an acknowledgement is waiting to be
-  sent, the extra ones are skipped, and so are those for an unknown weight
-  flag. It used to acknowledge only the stable
-  weight and the impedance.**
+- **The weigh-in also acknowledges each settling and stable weight frame that
+  decodes, as the Vitafit app does, so that the scale can replace any frame
+  that went missing or failed its checks. No-load frames and unknown flags
+  aren't acknowledged, and while an acknowledgement is waiting to be sent, the
+  extra ones are skipped. It used to acknowledge only the first stable weight
+  and the impedance.**
 - **Frame callbacks run during `async_measure()` as it takes each frame,
   instead of as each notification arrives, so they stop when it returns.
   Acknowledgements are sent in order in the background, so they don't hold up

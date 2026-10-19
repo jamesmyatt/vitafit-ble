@@ -67,9 +67,9 @@ measurement = await async_poll(ble_device, VitafitSession(display_unit=DisplayUn
 - `display_unit` sets the scale's display unit (kg, lb or st). Without it, the
   scale keeps its unit. `measurement.display_unit` is the unit it was showing.
 - `ack_every_frame=False` acknowledges only the stable weight and the
-  impedance, as openScale does. By default every weight and impedance frame is
-  acknowledged, as the Vitafit app does, so that the scale replaces any frame
-  that went missing or failed its checks.
+  impedance, as openScale does. By default each settling and stable weight
+  frame is also acknowledged, as the Vitafit app does, so that the scale can
+  replace any frame that went missing or failed its checks.
 - `weight_timeout` and `impedance_timeout` change the waits.
 
 ## Seeing each frame

@@ -81,8 +81,8 @@ weigh-in, and a `BleakError` counts as a failed poll.
   callbacks, then decides whether the weigh-in has moved on: from waiting for
   a stable weight to waiting for impedance, or to the end. An optional
   acknowledgement, one that `ack_every_frame` adds, is only queued if none is
-  already waiting, so a slow link can't build up a backlog, and not for a
-  weight flag that isn't a `WeightFlag`. The stable weight's and the
+  already waiting, so a slow link can't build up a backlog, and not at all
+  for a no-load frame or an unknown flag. The first stable weight's and the
   impedance's are always queued.
 - **The ack sender**, a separate task that sends the queued acknowledgements in
   order, waiting for each write's response. It only runs while the main loop

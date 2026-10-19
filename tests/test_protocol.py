@@ -180,7 +180,8 @@ def test_commands() -> None:
 @pytest.mark.parametrize(
     ("frame", "ack"),
     [
-        (NO_LOAD, h("a5 05 26 10 00 33 aa")),
+        # No load: the Vitafit app doesn't acknowledge it.
+        (NO_LOAD, None),
         (SETTLING, h("a5 05 26 10 01 32 aa")),  # Vitafit app
         (STABLE, h("a5 05 26 10 02 31 aa")),  # openScale
         # Unknown flag (0x05): no known acknowledgement.
@@ -190,7 +191,14 @@ def test_commands() -> None:
     ],
 )
 def test_ack_command(frame: bytes, ack: bytes | None) -> None:
-    """A weight acknowledgement echoes the frame's flag, if it's a known one."""
+    """A weight acknowledgement echoes the frame's flag, if the app acks it."""
     decoded = decode(frame)
     assert decoded is not None
     assert ack_command(decoded) == ack
+
+
+def test_ack_command_plain_int_flag() -> None:
+    """A flag given as a plain int is acknowledged like the WeightFlag."""
+    frame = WeightFrame(87.35, flag=2, display_unit=DisplayUnit.KG)
+    assert frame.stable
+    assert ack_command(frame) == h("a5 05 26 10 02 31 aa")

@@ -94,14 +94,14 @@ class VitafitSession:
         no current, so impedance is None. Without it, select the normal mode.
         The scale keeps the mode for later weigh-ins without a connection.
 
-        With ``ack_every_frame``, the default, acknowledge every weight and
-        impedance frame, as the Vitafit app does, so that the scale replaces
-        any frame that went missing or failed its checks. While an ack is
+        With ``ack_every_frame``, the default, also acknowledge each settling
+        and stable weight frame, as the Vitafit app does, so that the scale
+        can replace any frame that went missing or failed its checks. No-load
+        frames and unknown flags aren't acknowledged, and while an ack is
         already waiting to be sent, the extra ones are skipped, so a slow link
-        can't build up a backlog, and so are acks for weight flags that aren't
-        a WeightFlag; the stable weight's and the impedance's acks are never
-        skipped. Without it, only acknowledge the stable weight and
-        the impedance, as openScale does.
+        can't build up a backlog. The first stable weight's and the
+        impedance's acks are never skipped. Without it, only acknowledge the
+        first stable weight and the impedance, as openScale does.
         """
         self._weight_timeout = weight_timeout
         self._impedance_timeout = impedance_timeout
@@ -196,7 +196,7 @@ class VitafitSession:
             )
             # Optional acks are skipped while one is already waiting to be
             # sent, so a slow link can't build up a backlog. ack_command gives
-            # None for a weight flag that has no known ack.
+            # None for a weight flag that isn't acknowledged.
             if (wanted or (self._ack_every_frame and acks.empty())) and (
                 ack := ack_command(frame)
             ) is not None:
@@ -266,7 +266,9 @@ class VitafitSession:
             return None
         return Measurement(
             weight_kg=self._weight.weight_kg,
-            impedance_ohm=self._impedance.impedance_ohm if self._impedance else None,
+            impedance_ohm=(
+                self._impedance.impedance_ohm if self._impedance is not None else None
+            ),
             display_unit=self._weight.display_unit,
         )
 

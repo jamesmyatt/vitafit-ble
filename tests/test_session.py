@@ -38,6 +38,7 @@ from .frames import (
     IMPEDANCE,
     IMPEDANCE_FAILED,
     IMPEDANCE_WEIGHT_ONLY,
+    NO_LOAD,
     SETTLING,
     SETTLING_LB,
     SETTLING_ST,
@@ -281,9 +282,10 @@ async def test_optional_acks_skipped_while_one_waits() -> None:
 UNKNOWN_FLAG = bytes.fromhex("5a 0a 26 10 05 00 00 21 22 24 1e aa")
 
 
-async def test_unknown_flag_not_acknowledged() -> None:
-    """A weight frame with an unknown flag gets no optional ack."""
-    client = FakeClient(first=UNKNOWN_FLAG)
+@pytest.mark.parametrize("first", [NO_LOAD, UNKNOWN_FLAG])
+async def test_flag_not_acknowledged(first: bytes) -> None:
+    """A no-load frame or an unknown flag gets no optional ack."""
+    client = FakeClient(first=first)
     result = await async_measure(client)  # type: ignore[arg-type]
     assert result == Measurement(87.35, impedance_ohm=466, display_unit=KG)
     assert client.written == [
