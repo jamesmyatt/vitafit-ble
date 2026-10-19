@@ -38,7 +38,7 @@ from vitafit_ble import VitafitSession
 measurement = await VitafitSession(weight_only=True).async_measure(client)
 ```
 
-For Home Assistant, `poll_needed()` says when to connect, and `async_poll()` connects, runs a weigh-in and disconnects. See [usage](docs/usage.md) for details.
+For Home Assistant, `awake()` says whether the scale can be connected to, and `async_poll()` connects, runs a weigh-in and disconnects. See [usage](docs/usage.md) for details.
 
 ## Acknowledgements
 

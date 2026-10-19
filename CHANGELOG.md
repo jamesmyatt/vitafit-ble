@@ -8,6 +8,14 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-19
+
+### Changed
+
+- **`poll_needed(service_info, last_poll)` is replaced by `awake(service_info)`,
+  which only checks that the advertisement is recent. How often to poll is up
+  to the caller, so `const.POLL_INTERVAL` is removed.**
+
 ## [0.5.0] - 2026-10-19
 
 ### Added
@@ -137,7 +145,8 @@ openScale's VT701 handler.
   `weight_only`, are passed to `async_measure()`.
 - Type hints (`py.typed`). Requires Python 3.11 or later.
 
-[Unreleased]: https://github.com/jamesmyatt/vitafit-ble/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/jamesmyatt/vitafit-ble/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/jamesmyatt/vitafit-ble/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/jamesmyatt/vitafit-ble/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/jamesmyatt/vitafit-ble/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/jamesmyatt/vitafit-ble/compare/v0.2.0...v0.3.0

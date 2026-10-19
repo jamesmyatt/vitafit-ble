@@ -24,19 +24,20 @@ if supported(service_info):
 
 `async_poll()` connects with
 [`bleak-retry-connector`](https://github.com/Bluetooth-Devices/bleak-retry-connector),
-runs a weigh-in and disconnects. Call it when `poll_needed()` is true:
+runs a weigh-in and disconnects. Call it when `awake()` is true:
 
 ```python
-from vitafit_ble import async_poll, poll_needed
+from vitafit_ble import async_poll, awake
 
-if poll_needed(service_info, last_poll=None):
+if awake(service_info):
     measurement = await async_poll(ble_device)
 # Measurement(weight_kg=87.35, impedance_ohm=466, display_unit=<DisplayUnit.KG: 1>)
 ```
 
-`poll_needed()` is true for the first advertisement, then at most once every
-60 s, so a weigh-in is read once. The advertisement must also be at most 5 s
-old, so it's safe to call from a timer: it's false once the scale sleeps.
+`awake()` is true while the advertisement is at most 5 s old, so it's safe to
+call from a timer: it's false once the scale sleeps. When to poll again is up
+to you. After a weigh-in, a new connection gets no weight frames until the
+scale has slept and woken again, so poll at most once per wake.
 
 The weigh-in waits up to 30 s for a stable weight, acknowledges it, then waits
 up to 10 s for impedance. The weight is always in kg, whatever the scale
@@ -128,7 +129,7 @@ service_info = BluetoothServiceInfoBleak(
     device=device,
     advertisement=advertisement_data,
     connectable=True,
-    time=monotonic_time_coarse(),  # poll_needed() checks it's recent
+    time=monotonic_time_coarse(),  # awake() checks it's recent
     tx_power=advertisement_data.tx_power or 0,
     raw=None,
 )

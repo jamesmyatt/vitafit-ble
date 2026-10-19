@@ -13,7 +13,6 @@ from .const import (
     LOCAL_NAME_PREFIX,
     MANUFACTURER,
     MODEL,
-    POLL_INTERVAL,
 )
 from .session import async_measure
 
@@ -36,23 +35,17 @@ def device_name(address: str) -> str:
     return f"{MANUFACTURER} {MODEL} {short_address(address)}"
 
 
-def poll_needed(
-    service_info: BluetoothServiceInfoBleak, last_poll: float | None
-) -> bool:
-    """Return True if the scale should be connected to.
+def awake(service_info: BluetoothServiceInfoBleak) -> bool:
+    """Return True if the scale is awake, so it can be connected to.
 
-    ``last_poll`` is the seconds since the last poll, or None if there hasn't
-    been one. True for the first advertisement, then at most once every
-    ``POLL_INTERVAL`` (60 s), so one weigh-in is read once. Safe to call on
-    every advertisement. The scale only advertises while awake, i.e. after
-    being stepped on, so the advertisement must also be at most
-    ``ADVERTISEMENT_MAX_AGE`` (5 s) old. This lets a timer call it with the
-    latest advertisement, which Home Assistant doesn't dispatch when it repeats
-    the previous one.
+    The scale only advertises while awake, after being stepped on, so the
+    advertisement must be at most ``ADVERTISEMENT_MAX_AGE`` (5 s) old. This lets
+    a timer call it with the latest advertisement, which Home Assistant doesn't
+    dispatch when it repeats the previous one. When to poll again is up to the
+    caller: after a weigh-in, a new connection gets no weight frames until the
+    scale has slept and woken again.
     """
-    return (last_poll is None or last_poll > POLL_INTERVAL) and (
-        monotonic_time_coarse() - service_info.time <= ADVERTISEMENT_MAX_AGE
-    )
+    return monotonic_time_coarse() - service_info.time <= ADVERTISEMENT_MAX_AGE
 
 
 async def async_poll(

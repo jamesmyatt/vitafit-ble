@@ -5,15 +5,15 @@ Auto-generated reference for `vitafit_ble`. For task-oriented examples, see
 
 ## Device
 
-`supported()` and `device_name()` work on advertisements. `poll_needed()` says
-when to connect, and `async_poll()` connects and runs a weigh-in.
+`supported()` and `device_name()` work on advertisements. `awake()` says whether
+the scale can be connected to, and `async_poll()` connects and runs a weigh-in.
 
 ```{eval-rst}
 .. autofunction:: vitafit_ble.supported
 
 .. autofunction:: vitafit_ble.device_name
 
-.. autofunction:: vitafit_ble.poll_needed
+.. autofunction:: vitafit_ble.awake
 
 .. autofunction:: vitafit_ble.async_poll
 ```
@@ -75,8 +75,6 @@ for debugging and tests, such as `scripts/capture.py`; see
 .. autodata:: vitafit_ble.const.WEIGHT_TIMEOUT
 
 .. autodata:: vitafit_ble.const.IMPEDANCE_TIMEOUT
-
-.. autodata:: vitafit_ble.const.POLL_INTERVAL
 
 .. autodata:: vitafit_ble.const.ADVERTISEMENT_MAX_AGE
 ```
