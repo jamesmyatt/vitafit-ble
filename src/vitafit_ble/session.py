@@ -108,7 +108,7 @@ class VitafitSession:
         self._display_unit = display_unit
         self._weight_only = weight_only
         self._ack_every_frame = ack_every_frame
-        self._callbacks: list[tuple[type[Frame], Callable[[Frame], None]]] = []
+        self._callbacks: tuple[tuple[type[Frame], Callable[[Frame], None]], ...] = ()
         self._frames: asyncio.Queue[WeightFrame | ImpedanceFrame] = asyncio.Queue()
         self._weight: WeightFrame | None = None
         self._impedance: ImpedanceFrame | None = None
@@ -126,10 +126,12 @@ class VitafitSession:
         raises it. Return a function that unregisters it.
         """
         registration = (frame_type, cast("Callable[[Frame], None]", callback))
-        self._callbacks.append(registration)
+        self._callbacks = (*self._callbacks, registration)
 
         def _unregister() -> None:
-            self._callbacks.remove(registration)
+            callbacks = list(self._callbacks)
+            callbacks.remove(registration)
+            self._callbacks = tuple(callbacks)
 
         return _unregister
 
@@ -244,7 +246,7 @@ class VitafitSession:
             await self._async_write(client, command)
 
     def _dispatch(self, frame: Frame) -> None:
-        for frame_type, callback in list(self._callbacks):
+        for frame_type, callback in self._callbacks:
             if isinstance(frame, frame_type):
                 callback(frame)
 

@@ -546,6 +546,20 @@ async def test_sender_stopped_before_return() -> None:
     assert client.ack_cancelled
 
 
+async def test_unregister_during_dispatch() -> None:
+    """A callback can unregister itself while frames are being dispatched."""
+    calls: list[WeightFrame] = []
+    session = VitafitSession()
+
+    def _once(frame: WeightFrame) -> None:
+        calls.append(frame)
+        unregister()
+
+    unregister = session.register_callback(WeightFrame, _once)
+    await async_measure(FakeClient(), session)  # type: ignore[arg-type]
+    assert calls == [decode(SETTLING)]
+
+
 async def test_unregister_callback() -> None:
     weights: list[WeightFrame] = []
     session = VitafitSession()
