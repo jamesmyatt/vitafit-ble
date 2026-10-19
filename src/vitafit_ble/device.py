@@ -63,9 +63,10 @@ async def async_poll(
     ``session`` sets the options and callbacks, as for ``async_measure``, for
     example ``await async_poll(ble_device, VitafitSession(weight_only=True))``.
 
-    Return None if no stable weight arrives. A Bluetooth error, connecting or
-    during the weigh-in, raises ``BleakError``, after disconnecting. It isn't
-    logged, so the caller can log a run of failures once.
+    Return None if no stable weight arrives, or if the impedance arrives
+    first. A Bluetooth error, connecting or during the weigh-in, raises
+    ``BleakError``, after disconnecting. It isn't logged, so the caller can log
+    a run of failures once.
     """
     _LOGGER.debug("Polling Vitafit scale: %s", ble_device.address)
     client = await establish_connection(

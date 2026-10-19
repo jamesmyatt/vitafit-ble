@@ -66,6 +66,10 @@ measurement = await async_poll(ble_device, VitafitSession(display_unit=DisplayUn
   weigh-ins without a connection.
 - `display_unit` sets the scale's display unit (kg, lb or st). Without it, the
   scale keeps its unit. `measurement.display_unit` is the unit it was showing.
+- `ack_every_frame=False` acknowledges only the stable weight and the
+  impedance, as openScale does. By default each settling and stable weight
+  frame is also acknowledged, as the Vitafit app does, so that the scale can
+  replace any frame that went missing or failed its checks.
 - `weight_timeout` and `impedance_timeout` change the waits.
 
 ## Seeing each frame
@@ -87,7 +91,7 @@ session.register_callback(Frame, print)
 measurement = await session.async_measure(client)
 ```
 
-Callbacks for a frame's own class run before those for `Frame`. For the raw
+A frame's callbacks run in the order registered, whatever their type. For the raw
 bytes of every command and notification, override `on_send` and `on_receive`:
 
 ```python
@@ -99,9 +103,11 @@ class PrintingSession(VitafitSession):
         print("RX", data.hex(" "))
 ```
 
-These only observe the exchange. The receive hooks and callbacks run as each
-notification arrives, including after `async_measure()` returns, until you
-disconnect. `scripts/capture.py` logs a weigh-in this way.
+These only observe the exchange. `on_receive` runs as each notification
+arrives, including after `async_measure()` returns, until you disconnect. The
+callbacks run during `async_measure()` as it takes each frame, before the
+frame's acknowledgement is sent, so they stop when it returns. An exception from a callback ends the weigh-in, and
+`async_measure()` raises it. `scripts/capture.py` logs a weigh-in this way.
 
 ## Building a `BluetoothServiceInfoBleak` outside Home Assistant
 

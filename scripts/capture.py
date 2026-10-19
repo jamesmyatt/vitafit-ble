@@ -24,7 +24,7 @@ import logging
 from pathlib import Path
 import sys
 import time
-from typing import TYPE_CHECKING, Any, TextIO
+from typing import TYPE_CHECKING, Any, TextIO, override
 
 from bleak import BleakScanner
 from bleak.exc import BleakError
@@ -84,16 +84,18 @@ class RecordingSession(VitafitSession):
         self._recorder = recorder
         self.register_callback(Frame, self._on_frame)
 
+    @override
     def on_send(self, data: bytes) -> None:
         """Log a command."""
         self._raw("tx", WRITE_CHARACTERISTIC_UUID, data)
 
+    @override
     def on_receive(self, data: bytes) -> None:
         """Log a notification."""
         self._raw("rx", NOTIFY_CHARACTERISTIC_UUID, data)
 
     def _on_frame(self, frame: Frame) -> None:
-        """Log a decoded frame, after its notification."""
+        """Log a decoded frame, before its acknowledgement is sent."""
         _LOGGER.info("    %s", frame)
         self._recorder.record(
             "frame", type=type(frame).__name__, **dataclasses.asdict(frame)
@@ -188,13 +190,15 @@ class WeighInOptions:
     weight_timeout: float
     """Seconds to wait for a stable weight."""
     impedance_timeout: float
-    """Seconds to wait for impedance after the ack."""
+    """Seconds to wait for impedance after the stable weight."""
     linger: float
     """Seconds to keep listening after the weigh-in."""
     unit: DisplayUnit | None
     """Display unit to set; None leaves the scale's unit alone."""
     weight_only: bool
     """Select the scale's weight-only mode instead of measuring impedance."""
+    ack_every_frame: bool
+    """Also acknowledge settling and stable weight frames, not just the first."""
 
 
 async def _async_weigh_in(
@@ -236,6 +240,7 @@ async def _async_weigh_in(
             impedance_timeout=options.impedance_timeout,
             display_unit=options.unit,
             weight_only=options.weight_only,
+            ack_every_frame=options.ack_every_frame,
         )
         measurement = await session.async_measure(client)
         _LOGGER.info("Result: %s", measurement)
@@ -253,6 +258,11 @@ async def _async_weigh_in(
         _LOGGER.error("Bluetooth error: %s", err)  # noqa: TRY400
         recorder.record("error", error=str(err))
         return False
+    except asyncio.CancelledError:
+        # Ctrl+C cancels the main task; record it before disconnecting.
+        _LOGGER.info("Interrupted; disconnecting")
+        recorder.record("interrupted")
+        raise
     finally:
         expected = True
         await client.disconnect()
@@ -288,7 +298,8 @@ def _parse_args() -> argparse.Namespace:
         "--impedance-timeout",
         type=float,
         default=IMPEDANCE_TIMEOUT,
-        help="seconds to wait for impedance after the ack (default: %(default)s)",
+        help="seconds to wait for impedance after the stable weight "
+        "(default: %(default)s)",
     )
     parser.add_argument(
         "--unit",
@@ -318,6 +329,14 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="use the Vitafit app's weight-only mode: no impedance current. The "
         "scale keeps the mode for offline weigh-ins until the next connection",
+    )
+    parser.add_argument(
+        "--ack-every-frame",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="also acknowledge each settling and stable weight frame, as the "
+        "Vitafit app does; with --no-ack-every-frame, only the first stable "
+        "weight and the impedance, as openScale does (default: %(default)s)",
     )
     parser.add_argument(
         "-v",
@@ -358,6 +377,7 @@ async def _async_main(args: argparse.Namespace) -> int:
                     linger=args.linger,
                     unit=UNITS[args.unit] if args.unit else None,
                     weight_only=args.weight_only,
+                    ack_every_frame=args.ack_every_frame,
                 ),
             )
             if args.rescan:
@@ -387,7 +407,10 @@ def main() -> int:
     if args.verbose:
         logging.getLogger("bleak").setLevel(logging.DEBUG)
         logging.getLogger("vitafit_ble").setLevel(logging.DEBUG)
-    return asyncio.run(_async_main(args))
+    try:
+        return asyncio.run(_async_main(args))
+    except KeyboardInterrupt:
+        return 130
 
 
 if __name__ == "__main__":

@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import IntEnum
-from functools import reduce
+from functools import cache, reduce
 import logging
 from operator import xor
 from typing import TYPE_CHECKING
@@ -34,8 +34,6 @@ MODE_WEIGHT_ONLY = 0x01
 # Weight frame byte 7 is UNIT_BASE + the current display unit, but the weight
 # itself is always sent in 0.01 kg.
 UNIT_BASE = 0x20
-
-STABLE_FLAG = 0x02
 
 MIN_FRAME_LENGTH = 6
 
@@ -73,6 +71,17 @@ WEIGHT_FRAME_LENGTH = 12
 IMPEDANCE_FRAME_LENGTH = 13
 
 
+class WeightFlag(IntEnum):
+    """Weight frame flag: how far the reading has got."""
+
+    NO_LOAD = 0x00
+    """Nobody is on the scale."""
+    MEASURING = 0x01
+    """The reading is settling."""
+    STABLE = 0x02
+    """The reading has settled."""
+
+
 class ImpedanceCode(IntEnum):
     """Impedance values that mean the scale didn't measure it."""
 
@@ -101,10 +110,15 @@ class WeightFrame(Frame):
 
     weight_kg: float
     """Weight in kg, to 0.01 kg, whatever the display unit."""
-    stable: bool
-    """True once the reading has settled."""
+    flag: int
+    """How far the reading has got: a WeightFlag, or the raw value if unknown."""
     display_unit: DisplayUnit | None
     """Unit the scale is displaying; None if the unit code is unknown."""
+
+    @property
+    def stable(self) -> bool:
+        """True once the reading has settled (``flag`` is WeightFlag.STABLE)."""
+        return self.flag == WeightFlag.STABLE
 
 
 @dataclass(frozen=True, slots=True)
@@ -113,6 +127,11 @@ class ImpedanceFrame(Frame):
 
     impedance_ohm: int | None
     """Impedance in Ω; None if the scale couldn't measure it, e.g. through socks."""
+    code: int | None = None
+    """The raw value when ``impedance_ohm`` is None; None for a reading.
+
+    An ImpedanceCode if it's a known one, otherwise the out-of-range value.
+    """
 
 
 def _checksum(data: Iterable[int]) -> int:
@@ -121,6 +140,12 @@ def _checksum(data: Iterable[int]) -> int:
 
 def encode_command(frame_type: FrameType, data: bytes = b"") -> bytes:
     """Build a client-to-scale command frame."""
+    # Typed wrapper: functools.cache hides the arguments' types from mypy.
+    return _encode_command(frame_type, data)
+
+
+@cache
+def _encode_command(frame_type: FrameType, data: bytes) -> bytes:
     body = (len(data) + 4, PRODUCT_ID, frame_type, *data)
     return bytes((HEADER_CLIENT, *body, _checksum(body), TRAILER))
 
@@ -147,8 +172,21 @@ def start_commands(
         yield unit_command(display_unit)
 
 
-ACK_STABLE_WEIGHT = encode_command(FrameType.WEIGHT, bytes((STABLE_FLAG,)))
-ACK_IMPEDANCE = encode_command(FrameType.IMPEDANCE, b"\x00")
+def ack_command(frame: WeightFrame | ImpedanceFrame) -> bytes | None:
+    """Build the acknowledgement of a decoded weight or impedance frame.
+
+    A weight acknowledgement echoes the frame's flag, for the flags the Vitafit
+    app acknowledges: measuring and stable. Return None for no load, which the
+    app doesn't acknowledge, or an unknown flag, as no capture shows how the
+    scale treats those. An impedance acknowledgement is always the same.
+    """
+    match frame:
+        case WeightFrame(flag=WeightFlag.MEASURING | WeightFlag.STABLE as flag):
+            return encode_command(FrameType.WEIGHT, bytes((flag,)))
+        case WeightFrame():
+            return None
+        case ImpedanceFrame():  # pragma: no branch
+            return encode_command(FrameType.IMPEDANCE, b"\x00")
 
 
 def _is_valid(frame: bytes) -> bool:
@@ -168,14 +206,14 @@ def _decode_weight(frame: bytes) -> WeightFrame | None:
         return None
     raw = int.from_bytes(frame[8:10], "big")
     try:
+        flag: int = WeightFlag(frame[4])
+    except ValueError:
+        flag = frame[4]
+    try:
         display_unit: DisplayUnit | None = DisplayUnit(frame[7] - UNIT_BASE)
     except ValueError:
         display_unit = None
-    return WeightFrame(
-        weight_kg=raw / 100,
-        stable=frame[4] == STABLE_FLAG,
-        display_unit=display_unit,
-    )
+    return WeightFrame(weight_kg=raw / 100, flag=flag, display_unit=display_unit)
 
 
 def _decode_impedance(frame: bytes) -> ImpedanceFrame | None:
@@ -192,8 +230,8 @@ def _decode_impedance(frame: bytes) -> ImpedanceFrame | None:
             return ImpedanceFrame(impedance_ohm=ohm)
         case _:
             _LOGGER.debug("Impedance out of range: %s Ω", ohm)
-    # Still a valid frame, unlike None, so the session acks it and stops waiting.
-    return ImpedanceFrame(impedance_ohm=None)
+            return ImpedanceFrame(impedance_ohm=None, code=ohm)
+    return ImpedanceFrame(impedance_ohm=None, code=ImpedanceCode(ohm))
 
 
 # Decoder for each frame type that decode() turns into a Frame. Other valid

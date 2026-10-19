@@ -8,12 +8,52 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-19
+
 ### Added
 
+- `VitafitSession(ack_every_frame=False)` acknowledges only the stable weight
+  and the impedance, as openScale does.
+- `WeightFlag`, exported from `vitafit_ble`: a weight frame's flag, `NO_LOAD`,
+  `MEASURING` or `STABLE`.
+- `ImpedanceFrame.code`: the raw value when there's no impedance reading, an
+  `ImpedanceCode` (`FAILED` or `WEIGHT_ONLY`) if it's a known one.
+  `ImpedanceCode` is exported from `vitafit_ble`.
 - Python 3.15 support, tested in CI.
 - A Python version policy in the installation docs: supported and tested from
   the version the latest stable Home Assistant Core release requires (3.14),
-  with older versions back to 3.11 on a best-effort basis.
+  with older versions back to 3.12 on a best-effort basis.
+
+### Changed
+
+- **Requires Python 3.12 or later, up from 3.11.**
+- **The weigh-in also acknowledges each settling and stable weight frame that
+  decodes, as the Vitafit app does, so that the scale can replace any frame
+  that went missing or failed its checks. No-load frames and unknown flags
+  aren't acknowledged, and while an acknowledgement is waiting to be sent, the
+  extra ones are skipped. It used to acknowledge only the first stable weight
+  and the impedance.**
+- **Frame callbacks run during `async_measure()` as it takes each frame,
+  instead of as each notification arrives, so they stop when it returns.
+  Acknowledgements are sent in order in the background, so they don't hold up
+  the callbacks. `on_receive()` still sees every notification until disconnecting.
+  An exception from a callback now ends the weigh-in, and `async_measure()`
+  raises it.**
+- **An impedance frame ends the weigh-in even before a stable weight, so
+  `async_measure()` returns `None` straight away instead of waiting for the
+  weight timeout.**
+- **`WeightFrame` has a `flag` field, a `WeightFlag` or the raw value if it's
+  unknown, instead of a `stable` field. `stable` is now a property worked out
+  from `flag`, so reading `frame.stable` still works, but a `WeightFrame` is
+  created with `flag=` instead of `stable=`.**
+- **A frame's callbacks run in the order registered. `Frame` callbacks used to
+  run after those for the frame's own class.**
+
+### Removed
+
+- `vitafit_ble.protocol.ACK_STABLE_WEIGHT`, `ACK_IMPEDANCE` and `STABLE_FLAG`.
+  `ack_command()` builds acknowledgements from the decoded frame, and
+  `WeightFlag.STABLE` replaces `STABLE_FLAG`.
 
 ## [0.4.0] - 2026-10-12
 
@@ -97,7 +137,8 @@ openScale's VT701 handler.
   `weight_only`, are passed to `async_measure()`.
 - Type hints (`py.typed`). Requires Python 3.11 or later.
 
-[Unreleased]: https://github.com/jamesmyatt/vitafit-ble/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/jamesmyatt/vitafit-ble/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/jamesmyatt/vitafit-ble/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/jamesmyatt/vitafit-ble/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/jamesmyatt/vitafit-ble/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/jamesmyatt/vitafit-ble/compare/v0.1.0...v0.2.0

@@ -38,7 +38,13 @@ when to connect, and `async_poll()` connects and runs a weigh-in.
 .. autoclass:: vitafit_ble.WeightFrame
     :members:
 
+.. autoclass:: vitafit_ble.WeightFlag
+    :members:
+
 .. autoclass:: vitafit_ble.ImpedanceFrame
+    :members:
+
+.. autoclass:: vitafit_ble.ImpedanceCode
     :members:
 
 .. autoclass:: vitafit_ble.Measurement
