@@ -57,6 +57,17 @@ Several clients, from captures of a real scale:
   sleeps gets the replies to the mode and hello commands, but no weight or
   impedance frames.
 
+Connecting during a weigh-in, from captures of a real scale:
+
+- A client can connect while someone is already on the scale. The first
+  weight frames are then already stable, and can arrive before the mode and
+  hello commands are sent.
+- The weigh-in still completes, with impedance, but the replies to the mode
+  and hello commands can come late or not at all, so a client shouldn't wait
+  for them.
+- The impedance can arrive sooner than usual after the stable-weight
+  acknowledgement.
+
 Acknowledgements:
 
 - openScale acknowledges only one weight frame, the stable weight, and the
