@@ -1,6 +1,6 @@
 """Bluetooth library for Vitafit devices."""
 
-from .device import async_poll, device_name, poll_needed, supported
+from .device import async_poll, awake, device_name, supported
 from .protocol import (
     DisplayUnit,
     Frame,
@@ -22,7 +22,7 @@ __all__ = [
     "WeightFrame",
     "async_measure",
     "async_poll",
+    "awake",
     "device_name",
-    "poll_needed",
     "supported",
 ]

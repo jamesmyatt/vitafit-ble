@@ -41,9 +41,10 @@ exchange. Its command-line options set the session's options (`--weight-timeout`
 
 The
 [integration's coordinator](https://github.com/jamesmyatt/ha-vitafit-ble/blob/main/custom_components/vitafit_ble/coordinator.py)
-calls `async_poll` when Home Assistant's Bluetooth integration has a recent
-advertisement from the scale, `poll_needed()` is true, and a connectable
-Bluetooth adapter or proxy can reach it.
+calls `async_poll` when Home Assistant's Bluetooth integration has an
+advertisement from the scale, `awake()` is true, the integration's own rules
+for how often to poll allow it, and a connectable Bluetooth adapter or proxy
+can reach it.
 
 - **Client:** `async_poll` connects to a `BLEDevice` from Home Assistant. That's
   the latest advertisement's, if it came through a connectable adapter or

@@ -21,8 +21,8 @@ from vitafit_ble import (
     VitafitSession,
     async_measure,
     async_poll,
+    awake,
     device_name,
-    poll_needed,
     supported,
 )
 from vitafit_ble.protocol import (
@@ -608,17 +608,10 @@ def bleak_service_info(age: float) -> BluetoothServiceInfoBleak:
     )
 
 
-def test_poll_needed() -> None:
-    info = bleak_service_info(0)
-    assert poll_needed(info, None)
-    assert not poll_needed(info, 10)
-    assert poll_needed(info, 61)
-
-
-def test_poll_needed_stale_advertisement() -> None:
-    info = bleak_service_info(10)
-    assert not poll_needed(info, None)
-    assert not poll_needed(info, 61)
+def test_awake() -> None:
+    """The scale is awake while its advertisement is recent."""
+    assert awake(bleak_service_info(0))
+    assert not awake(bleak_service_info(10))
 
 
 BLE_DEVICE = BLEDevice("AA:BB:CC:DD:EE:FF", "Vitafit Body Fat", None)
