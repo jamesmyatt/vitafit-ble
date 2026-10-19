@@ -4,10 +4,10 @@ Python library (PyPI `vitafit-ble`, MIT) for the Vitafit VT701 body fat scale. I
 
 It is used by the Home Assistant integration in the sibling repo `../ha-vitafit-ble`. Read that repo's `CLAUDE.md` for the owner's preferences, the decisions already made and the overall next steps.
 
-## Status (11 Oct 2026)
+## Status (19 Oct 2026)
 
-- v0.4.0 (`async_poll` raises `BleakError` for a Bluetooth error during the weigh-in) released on PyPI on 12 Oct 2026 via `release.yml`, with docs at `vitafit-ble.readthedocs.io`. Renovate is enabled.
-- Tested on the owner's real VT701 with `scripts/capture.py`. The frames in `tests/frames.py` are real captures.
+- v0.5.0 (acks for settling and stable frames from a background sender, the single-loop `async_measure`, `WeightFlag`, Python 3.12 minimum; see `CHANGELOG.md`) released on PyPI on 19 Oct 2026 via `release.yml`, with docs at `vitafit-ble.readthedocs.io`. Renovate is enabled.
+- Tested on the owner's real VT701 with `scripts/capture.py`, most recently for 0.5.0 on 19 Oct 2026 (a weigh-in from an empty scale, and one connecting mid-weigh-in). The frames in `tests/frames.py` are real captures.
 - The Vitafit app's traffic was captured with Android HCI snoop logs, stored in a gitignored folder (`btsnoop_logs/`) because they include other devices' traffic.
 
 ## Scope and decisions
