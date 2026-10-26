@@ -55,7 +55,7 @@ uv sync --group docs && uv run sphinx-build -W -b html docs docs/_build/html
 uv build
 ```
 
-In CI, the pre-commit hooks run on [pre-commit.ci](https://pre-commit.ci) (configured by the `ci:` block in `.pre-commit-config.yaml`), as `pre-commit/action` recommends; `.github/workflows/ci.yml` only runs the tests.
+In CI, the pre-commit hooks run on [pre-commit.ci](https://pre-commit.ci) (configured by the `ci:` block in `.pre-commit-config.yaml`), as `pre-commit/action` recommends; `.github/workflows/ci.yml` only runs the tests. `.github/workflows/zizmor.yml` checks the workflows' security and reports findings in GitHub code scanning, so they don't fail the run.
 
 ## Release
 
